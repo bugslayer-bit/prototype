@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap");
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body,
+  #root {
+    font-family: "Roboto", sans-serif;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+    background:
+      radial-gradient(circle at top left, rgba(232, 244, 249, 0.7), transparent 28%),
+      linear-gradient(180deg, #f7f9fc 0%, #f3f6fa 100%);
+  }
+}
+
+@layer components {
+  .rental-table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #e2e8f0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rental-table-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .rental-table-scroll::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 9999px;
+  }
+
+  .rental-table-scroll::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 9999px;
+    border: 2px solid #e2e8f0;
+  }
+
+  .rental-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+}

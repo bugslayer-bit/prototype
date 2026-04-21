@@ -1,0 +1,1 @@
+export { AdminVerificationPage } from "./AdminVerificationPage";

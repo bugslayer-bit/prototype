@@ -1,0 +1,1 @@
+export { ContractorRegistrationIndividuals } from "./ContractorRegistrationIndividuals";

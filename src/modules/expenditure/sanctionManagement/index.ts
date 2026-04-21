@@ -1,0 +1,1 @@
+export { SanctionManagementPage } from "./SanctionManagementPage";

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IFMIS Frontend Study</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Global error handler — catches module import errors that React ErrorBoundary cannot
+      window.addEventListener('error', function(e) {
+        var root = document.getElementById('root');
+        if (root && !root.hasChildNodes()) {
+          root.innerHTML = '<div style="padding:32px;font-family:system-ui,sans-serif;max-width:800px;margin:40px auto">'
+            + '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:24px">'
+            + '<h1 style="color:#991b1b;font-size:22px;margin:0 0 8px">Module Load Error</h1>'
+            + '<p style="color:#b91c1c;font-size:14px;margin:0 0 16px">A JavaScript module failed to load. This usually means an import error.</p>'
+            + '<pre style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-size:12px;overflow:auto;max-height:200px;color:#dc2626">'
+            + (e.message || 'Unknown error') + (e.filename ? '\\n\\nFile: ' + e.filename + ':' + e.lineno : '')
+            + '</pre>'
+            + '<button onclick="window.location.href=\'/\'" style="margin-top:16px;padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Reload</button>'
+            + '</div></div>';
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('[IFMIS] Unhandled rejection:', e.reason);
+      });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>

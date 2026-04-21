@@ -1,0 +1,1 @@
+export { VendorManagementPage } from "./VendorManagementPage";

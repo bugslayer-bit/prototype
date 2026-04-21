@@ -1,0 +1,1 @@
+export { ContractClosurePage } from "./ContractClosurePage";
