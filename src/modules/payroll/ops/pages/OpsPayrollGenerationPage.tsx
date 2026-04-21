@@ -15,6 +15,7 @@ import {
 } from '../data/opsEmployeeSeed';
 import { getOpsCategoriesForAgency, getOpsCategory, isCentralPayrollAgency } from '../data/opsPayScales';
 import { postPayroll } from '../../state/payrollPostings';
+import { ALLOWANCES, DEDUCTIONS } from '../../state/payrollSeed';
 
 /** Payroll row enriched with computed gross/deductions/net (Step 3→6). */
 type EnrichedPayrollRow = OpsEmployee & {
@@ -28,7 +29,7 @@ type EnrichedPayrollRow = OpsEmployee & {
   netPay: number;
 };
 
-type PayrollGenStep = 'select-category' | 'confirm-data' | 'system-checks' | 'draft-paybill' | 'finalize' | 'post-mcp';
+type PayrollGenStep = 'select-category' | 'confirm-data' | 'system-checks' | 'draft-paybill' | 'finalize' | 'book-compensation' | 'post-mcp';
 
 /**
  * OpsPayrollGenerationPage — Full 6-step dynamic workflow
@@ -65,6 +66,13 @@ export function OpsPayrollGenerationPage() {
   const [frequency, setFrequency] = useState<'monthly' | 'fortnightly'>('monthly');
   const [mcpProgress, setMcpProgress] = useState<'idle' | 'validating' | 'posting' | 'confirming' | 'complete'>('idle');
   const [journalEntryId, setJournalEntryId] = useState<string | null>(null);
+  const [selectedBudgetHead, setSelectedBudgetHead] = useState('2110201');
+  const [breakdownPopup, setBreakdownPopup] = useState<{
+    emp: OpsEmployee;
+    allowances: { id: string; name: string; amount: number }[];
+    deductions: { id: string; name: string; amount: number }[];
+    type: 'allowances' | 'deductions';
+  } | null>(null);
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -167,6 +175,7 @@ export function OpsPayrollGenerationPage() {
       'system-checks',
       'draft-paybill',
       'finalize',
+      'book-compensation',
       'post-mcp',
     ];
     const idx = steps.indexOf(currentStep);
@@ -182,6 +191,7 @@ export function OpsPayrollGenerationPage() {
       'system-checks',
       'draft-paybill',
       'finalize',
+      'book-compensation',
       'post-mcp',
     ];
     const idx = steps.indexOf(currentStep);
@@ -379,7 +389,7 @@ export function OpsPayrollGenerationPage() {
             OPS Payroll Generation
           </h1>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">
-            6-Step Wizard
+            7-Step Wizard
           </span>
         </div>
         <p className="text-sm text-slate-600">
@@ -402,60 +412,57 @@ export function OpsPayrollGenerationPage() {
         </div>
       </div>
 
-      {/* Progress Indicator */}
+      {/* Progress Indicator — mirrors CS Payroll Generation stepper */}
       <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur p-6">
-        <div className="flex items-center justify-between">
+        <div className="mb-2 flex items-start justify-between px-4">
           {(() => {
-            const steps: PayrollGenStep[] = [
-              'select-category',
-              'confirm-data',
-              'system-checks',
-              'draft-paybill',
-              'finalize',
-              'post-mcp',
+            const steps: { key: PayrollGenStep; label: string }[] = [
+              { key: 'select-category', label: 'OPS Category Selection' },
+              { key: 'confirm-data', label: 'Payroll Computation' },
+              { key: 'system-checks', label: 'System Checks' },
+              { key: 'draft-paybill', label: 'Draft PayBill' },
+              { key: 'finalize', label: 'Finalize Paybill' },
+              { key: 'book-compensation', label: 'Booking Employee Compensation' },
+              { key: 'post-mcp', label: 'Post to MCP' },
             ];
-            const currentIdx = steps.indexOf(currentStep);
-            return [
-              { step: 'select-category', label: 'Category' },
-              { step: 'confirm-data', label: 'Confirm Data' },
-              { step: 'system-checks', label: 'System Checks' },
-              { step: 'draft-paybill', label: 'Draft PayBill' },
-              { step: 'finalize', label: 'Finalize' },
-              { step: 'post-mcp', label: 'Post to MCP' },
-            ].map((item, index) => (
-              <React.Fragment key={item.step}>
-                <div
-                  className={`flex flex-col items-center gap-2 cursor-pointer transition ${
-                    currentStep === item.step ? 'opacity-100' : 'opacity-60 hover:opacity-80'
-                  }`}
-                  onClick={() => {
-                    const targetIdx = steps.indexOf(item.step as PayrollGenStep);
-                    if (targetIdx <= currentIdx) {
-                      setCurrentStep(item.step as PayrollGenStep);
-                    }
-                  }}
-                >
+            return steps.map((step, idx) => {
+              const isActive = currentStep === step.key;
+              const isPassed = steps.findIndex((s) => s.key === currentStep) > idx;
+              return (
+                <React.Fragment key={step.key}>
+                  {idx > 0 && (
+                    <div className={`mt-5 h-1 flex-1 ${isPassed ? 'bg-green-500' : 'bg-slate-200'}`} />
+                  )}
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                      currentStep === item.step
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
+                    onClick={() => setCurrentStep(step.key)}
+                    className="flex flex-col items-center gap-2 cursor-pointer"
                   >
-                    {index + 1}
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold transition-all ${
+                        isActive
+                          ? 'bg-blue-500 text-white'
+                          : isPassed
+                          ? 'bg-green-500 text-white'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {isPassed ? '✓' : idx + 1}
+                    </div>
+                    <div
+                      className={`w-24 text-center text-[11px] font-semibold leading-tight transition-colors ${
+                        isActive
+                          ? 'text-blue-700'
+                          : isPassed
+                          ? 'text-green-700'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      {step.label}
+                    </div>
                   </div>
-                  <span className="text-xs font-medium text-slate-600">{item.label}</span>
-                </div>
-                {index < 5 && (
-                  <div
-                    className={`flex-1 h-1 mx-2 rounded ${
-                      currentIdx > index ? 'bg-blue-500' : 'bg-slate-200'
-                    }`}
-                    style={{ maxWidth: '60px' }}
-                  />
-                )}
-              </React.Fragment>
-            ));
+                </React.Fragment>
+              );
+            });
           })()}
         </div>
       </div>
@@ -604,70 +611,179 @@ export function OpsPayrollGenerationPage() {
           </div>
         )}
 
-        {/* STEP 2: CONFIRM DATA */}
-        {currentStep === 'confirm-data' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">
-                Step 2: Confirm Employee Data
-              </h2>
-              <p className="text-sm text-slate-600">
-                Review the {draftEmployees.length} employees selected for payroll processing.
-              </p>
-            </div>
+        {/* STEP 2: PAYROLL COMPUTATION — wide per-employee matrix (mirrors CS) */}
+        {currentStep === 'confirm-data' && (() => {
+          const fmt = (n: number) => (n === 0 ? '—' : n.toLocaleString());
+          const rows = draftEmployees.map((emp, idx) => {
+            const computed = getOpsEmployeeWithPayDetails(emp.eid);
+            const allowances = computed?.allowances ?? [];
+            const deductions = computed?.deductions ?? [];
+            const A = emp.monthlyBasicPay;
+            const B = 0;
+            const C = 0;
+            const D = allowances.reduce((s, a) => s + a.amount, 0);
+            const X = A + B + C + D;
+            const byName = (n: string) => deductions.find((d) => d.name.startsWith(n))?.amount ?? 0;
+            const E = byName('Provident Fund');
+            const F = byName('Tax Deducted');
+            const G = byName('Health Contribution');
+            const H = byName('Group Insurance');
+            const otherDed = deductions
+              .filter((d) => !/Provident Fund|Tax Deducted|Health Contribution|Group Insurance/.test(d.name))
+              .reduce((s, d) => s + d.amount, 0);
+            const I = otherDed;
+            const Y = E + F + G + H + I;
+            const Z = X - Y;
+            return { emp, idx, allowances, deductions, A, B, C, D, X, E, F, G, H, I, Y, Z };
+          });
+          const totals = rows.reduce(
+            (acc, r) => {
+              acc.A += r.A; acc.B += r.B; acc.C += r.C; acc.D += r.D; acc.X += r.X;
+              acc.E += r.E; acc.F += r.F; acc.G += r.G; acc.H += r.H; acc.I += r.I;
+              acc.Y += r.Y; acc.Z += r.Z;
+              return acc;
+            },
+            { A: 0, B: 0, C: 0, D: 0, X: 0, E: 0, F: 0, G: 0, H: 0, I: 0, Y: 0, Z: 0 },
+          );
 
-            <div className="overflow-x-auto border border-slate-200/50 rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200/50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-bold text-slate-900">Name</th>
-                    <th className="px-4 py-2 text-left font-bold text-slate-900">EID</th>
-                    <th className="px-4 py-2 text-left font-bold text-slate-900">Position</th>
-                    <th className="px-4 py-2 text-right font-bold text-slate-900">Basic Pay</th>
-                    <th className="px-4 py-2 text-right font-bold text-slate-900">Gross</th>
-                    <th className="px-4 py-2 text-center font-bold text-slate-900">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/50">
-                  {draftEmployees.map((emp) => (
-                    <tr key={emp.masterEmpId}>
-                      <td className="px-4 py-2 text-slate-900">{emp.firstName} {emp.lastName}</td>
-                      <td className="px-4 py-2 text-slate-600">{emp.eid}</td>
-                      <td className="px-4 py-2 text-slate-600">{emp.positionTitle}</td>
-                      <td className="px-4 py-2 text-right font-mono text-slate-900">
-                        Nu.{emp.monthlyBasicPay.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono text-slate-900">
-                        Nu.{(emp.monthlyBasicPay * 1.15).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-green-100 text-green-700">
-                          {emp.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          return (
+            <div className="space-y-6">
+              <div>
+                <h2 className="mb-4 text-2xl font-bold text-slate-900">Payroll Computation for Employee</h2>
+                <p className="text-slate-600">
+                  Live per-employee earnings, deductions and net pay computed from OPS master data, pay scales and allowance /
+                  deduction configuration. Basic Pay is sourced from the OPS registry and cannot be edited here.
+                </p>
+              </div>
 
-            {/* Navigation */}
-            <div className="flex gap-3 justify-between pt-4 border-t border-slate-200/50">
-              <button
-                onClick={goPrev}
-                className="px-6 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium transition"
-              >
-                ← Previous
-              </button>
-              <button
-                onClick={handleConfirmDataNext}
-                className="px-6 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium transition"
-              >
-                Next Step →
-              </button>
+              <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 flex items-center gap-3">
+                <span className="inline-block h-2 w-2 rounded-full bg-teal-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-teal-900">OPS roster synced</p>
+                  <p className="text-xs text-teal-700">Period: {months[selectedMonth]} {selectedYear} · {frequency}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span className="rounded bg-slate-100 px-2 py-0.5">Employee Details</span>
+                  <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-700">Earnings · Basic + Allowances</span>
+                  <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-700">Statutory Deductions</span>
+                  <span className="rounded bg-rose-100 px-2 py-0.5 text-rose-700">Other Deductions</span>
+                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">Net Pay</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700">
+                        <th colSpan={5} className="border border-slate-200 px-2 py-1.5 text-center text-xs font-bold">Employee Details</th>
+                        <th colSpan={4} className="border border-slate-200 bg-blue-50 px-2 py-1.5 text-center text-xs font-bold text-blue-800">Earnings</th>
+                        <th rowSpan={2} className="border border-slate-200 bg-blue-100 px-2 py-1.5 text-center text-xs font-bold text-blue-900 align-middle">Total Earnings<br/><span className="text-[9px] font-mono">X=A+B+C+D</span></th>
+                        <th colSpan={4} className="border border-slate-200 bg-amber-50 px-2 py-1.5 text-center text-xs font-bold text-amber-800">Statutory Deductions</th>
+                        <th rowSpan={2} className="border border-slate-200 bg-rose-50 px-2 py-1.5 text-center text-xs font-bold text-rose-800 align-middle">Other Deductions<br/><span className="text-[9px] font-mono">I</span></th>
+                        <th rowSpan={2} className="border border-slate-200 bg-amber-100 px-2 py-1.5 text-center text-xs font-bold text-amber-900 align-middle">Total Deductions<br/><span className="text-[9px] font-mono">Y=E+F+G+H+I</span></th>
+                        <th rowSpan={2} className="border border-slate-200 bg-emerald-100 px-2 py-1.5 text-center text-xs font-bold text-emerald-900 align-middle">Net Pay<br/><span className="text-[9px] font-mono">Z=X-Y</span></th>
+                      </tr>
+                      <tr className="bg-slate-50 text-slate-700">
+                        <th className="border border-slate-200 px-2 py-1.5 text-left">Sl. No</th>
+                        <th className="border border-slate-200 px-2 py-1.5 text-left">Name</th>
+                        <th className="border border-slate-200 px-2 py-1.5 text-left">EID</th>
+                        <th className="border border-slate-200 px-2 py-1.5 text-left">Position</th>
+                        <th className="border border-slate-200 px-2 py-1.5 text-left">Status</th>
+                        <th className="border border-slate-200 bg-blue-50 px-2 py-1.5 text-right">Basic Pay<br/><span className="text-[9px] font-mono text-blue-700">A</span></th>
+                        <th className="border border-slate-200 bg-blue-50 px-2 py-1.5 text-right">Arrears<br/><span className="text-[9px] font-mono text-blue-700">B</span></th>
+                        <th className="border border-slate-200 bg-blue-50 px-2 py-1.5 text-right">Partial Pay<br/><span className="text-[9px] font-mono text-blue-700">C</span></th>
+                        <th className="border border-slate-200 bg-blue-50 px-2 py-1.5 text-right">Total Allowances<br/><span className="text-[9px] font-mono text-blue-700">D</span></th>
+                        <th className="border border-slate-200 bg-amber-50 px-2 py-1.5 text-right">PF<br/><span className="text-[9px] font-mono text-amber-700">E</span></th>
+                        <th className="border border-slate-200 bg-amber-50 px-2 py-1.5 text-right">TDS<br/><span className="text-[9px] font-mono text-amber-700">F</span></th>
+                        <th className="border border-slate-200 bg-amber-50 px-2 py-1.5 text-right">HC<br/><span className="text-[9px] font-mono text-amber-700">G</span></th>
+                        <th className="border border-slate-200 bg-amber-50 px-2 py-1.5 text-right">GIS<br/><span className="text-[9px] font-mono text-amber-700">H</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ emp, allowances, deductions, A, B, C, D, X, E, F, G, H, I, Y, Z }, i) => (
+                        <tr key={emp.eid} className="hover:bg-indigo-50/30">
+                          <td className="border border-slate-200 px-2 py-1.5 font-mono text-slate-500">{i + 1}</td>
+                          <td className="border border-slate-200 px-2 py-1.5 font-semibold text-slate-900 whitespace-nowrap">{emp.firstName} {emp.lastName}</td>
+                          <td className="border border-slate-200 px-2 py-1.5 font-mono text-slate-600 whitespace-nowrap">{emp.eid}</td>
+                          <td className="border border-slate-200 px-2 py-1.5 text-slate-600 whitespace-nowrap">{emp.positionTitle}</td>
+                          <td className="border border-slate-200 px-2 py-1.5 text-slate-700">
+                            <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">{emp.status}</span>
+                          </td>
+                          <td className="border border-slate-200 bg-blue-50/40 px-2 py-1.5 text-right font-mono">
+                            <span className="font-bold text-blue-900">{fmt(A)}</span>
+                          </td>
+                          <td className="border border-slate-200 bg-blue-50/40 px-2 py-1.5 text-right font-mono text-slate-500">{fmt(B)}</td>
+                          <td className="border border-slate-200 bg-blue-50/40 px-2 py-1.5 text-right font-mono text-slate-500">{fmt(C)}</td>
+                          <td className="border border-slate-200 bg-blue-50/40 px-2 py-1.5 text-right font-mono text-slate-700">
+                            {D === 0 ? fmt(D) : (
+                              <button
+                                type="button"
+                                onClick={() => setBreakdownPopup({ emp, allowances, deductions, type: 'allowances' })}
+                                className="font-semibold text-blue-700 underline decoration-dotted underline-offset-2 hover:text-blue-900"
+                                title="View allowance breakdown"
+                              >
+                                {fmt(D)}
+                              </button>
+                            )}
+                          </td>
+                          <td className="border border-slate-200 bg-blue-100/60 px-2 py-1.5 text-right font-mono font-bold text-blue-900">{fmt(X)}</td>
+                          <td className="border border-slate-200 bg-amber-50/40 px-2 py-1.5 text-right font-mono text-slate-700">{fmt(E)}</td>
+                          <td className="border border-slate-200 bg-amber-50/40 px-2 py-1.5 text-right font-mono text-slate-700">{fmt(F)}</td>
+                          <td className="border border-slate-200 bg-amber-50/40 px-2 py-1.5 text-right font-mono text-slate-700">{fmt(G)}</td>
+                          <td className="border border-slate-200 bg-amber-50/40 px-2 py-1.5 text-right font-mono text-slate-700">{fmt(H)}</td>
+                          <td className="border border-slate-200 bg-rose-50/40 px-2 py-1.5 text-right font-mono text-slate-700">{fmt(I)}</td>
+                          <td className="border border-slate-200 bg-amber-100/60 px-2 py-1.5 text-right font-mono font-bold text-amber-900">
+                            {Y === 0 ? fmt(Y) : (
+                              <button
+                                type="button"
+                                onClick={() => setBreakdownPopup({ emp, allowances, deductions, type: 'deductions' })}
+                                className="font-bold text-amber-900 underline decoration-dotted underline-offset-2 hover:text-amber-700"
+                                title="View deduction breakdown"
+                              >
+                                {fmt(Y)}
+                              </button>
+                            )}
+                          </td>
+                          <td className="border border-slate-200 bg-emerald-100/60 px-2 py-1.5 text-right font-mono font-bold text-emerald-900">{fmt(Z)}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-100 font-bold">
+                        <td colSpan={5} className="border border-slate-300 px-2 py-2 text-right text-slate-800">Total Employees: {rows.length}</td>
+                        <td className="border border-slate-300 bg-blue-100 px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.A)}</td>
+                        <td className="border border-slate-300 bg-blue-100 px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.B)}</td>
+                        <td className="border border-slate-300 bg-blue-100 px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.C)}</td>
+                        <td className="border border-slate-300 bg-blue-100 px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.D)}</td>
+                        <td className="border border-slate-300 bg-blue-200 px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.X)}</td>
+                        <td className="border border-slate-300 bg-amber-100 px-2 py-2 text-right font-mono text-amber-900">{fmt(totals.E)}</td>
+                        <td className="border border-slate-300 bg-amber-100 px-2 py-2 text-right font-mono text-amber-900">{fmt(totals.F)}</td>
+                        <td className="border border-slate-300 bg-amber-100 px-2 py-2 text-right font-mono text-amber-900">{fmt(totals.G)}</td>
+                        <td className="border border-slate-300 bg-amber-100 px-2 py-2 text-right font-mono text-amber-900">{fmt(totals.H)}</td>
+                        <td className="border border-slate-300 bg-rose-100 px-2 py-2 text-right font-mono text-rose-900">{fmt(totals.I)}</td>
+                        <td className="border border-slate-300 bg-amber-200 px-2 py-2 text-right font-mono text-amber-900">{fmt(totals.Y)}</td>
+                        <td className="border border-slate-300 bg-emerald-200 px-2 py-2 text-right font-mono text-emerald-900">{fmt(totals.Z)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 rounded-lg bg-slate-50 p-4">
+                  <div><div className="text-xs text-slate-600">Total Headcount</div><div className="text-2xl font-bold text-slate-900">{rows.length}</div></div>
+                  <div><div className="text-xs text-slate-600">Total Earnings (X)</div><div className="text-2xl font-bold text-blue-700">Nu. {totals.X.toLocaleString()}</div></div>
+                  <div><div className="text-xs text-slate-600">Total Deductions (Y)</div><div className="text-2xl font-bold text-amber-700">Nu. {totals.Y.toLocaleString()}</div></div>
+                  <div><div className="text-xs text-slate-600">Total Net Pay (Z)</div><div className="text-2xl font-bold text-emerald-700">Nu. {totals.Z.toLocaleString()}</div></div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-between pt-4 border-t border-slate-200/50">
+                <button onClick={goPrev} className="px-6 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium transition">← Previous</button>
+                <button onClick={handleConfirmDataNext} className="px-6 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium transition">Next Step →</button>
+              </div>
+
+              {breakdownPopup && <OpsPayrollBreakdownModal data={breakdownPopup} onClose={() => setBreakdownPopup(null)} />}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* STEP 3: SYSTEM CHECKS */}
         {currentStep === 'system-checks' && (
@@ -829,17 +945,215 @@ export function OpsPayrollGenerationPage() {
           </div>
         )}
 
-        {/* STEP 6: POST TO MCP */}
+        {/* STEP 6: BOOKING EMPLOYEE COMPENSATION — journal voucher preview */}
+        {currentStep === 'book-compensation' && (() => {
+          const aggregate = draftPayBillData.reduce(
+            (acc, row) => {
+              acc.basic += row.monthlyBasicPay;
+              row.allowances.forEach((a) => {
+                acc.allowTotals[a.name] = (acc.allowTotals[a.name] ?? 0) + a.amount;
+              });
+              row.deductions.forEach((d) => {
+                acc.dedTotals[d.name] = (acc.dedTotals[d.name] ?? 0) + d.amount;
+              });
+              acc.net += row.netPay;
+              return acc;
+            },
+            {
+              basic: 0,
+              net: 0,
+              allowTotals: {} as Record<string, number>,
+              dedTotals: {} as Record<string, number>,
+            },
+          );
+
+          const debitLines = [
+            { code: '2110201', name: 'Basic Salary — OPS', amount: aggregate.basic },
+            ...Object.entries(aggregate.allowTotals).map(([name, amount]) => {
+              const code = ALLOWANCES.find((a) => a.name === name)?.ucoaCode ?? '2120199';
+              return { code, name, amount };
+            }),
+          ];
+          const creditLines = [
+            ...Object.entries(aggregate.dedTotals).map(([name, amount]) => {
+              const code = DEDUCTIONS.find((d) => d.name === name)?.ucoaCode ?? '22199';
+              return { code, name: `${name} Payable`, amount };
+            }),
+            { code: '22001', name: 'Net Salary Payable — Bank Disbursement', amount: aggregate.net },
+          ];
+
+          const totalDebit = debitLines.reduce((s, l) => s + l.amount, 0);
+          const totalCredit = creditLines.reduce((s, l) => s + l.amount, 0);
+          const balanced = totalDebit === totalCredit;
+          const fmt = (n: number) => (n === 0 ? '—' : n.toLocaleString());
+
+          return (
+            <div className="space-y-6">
+              <div>
+                <h2 className="mb-4 text-2xl font-bold text-slate-900">Booking Employee Compensation</h2>
+                <p className="text-slate-600">
+                  Draft journal entry preview for this OPS payroll run. Each budget line below records the debit (personnel-emolument expense) and credit (statutory liability or net salary payable) that will post to the General Ledger when the paybill is finalised.
+                </p>
+              </div>
+
+              <div className={`rounded-2xl border p-4 flex items-center gap-3 ${balanced ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+                <span className={`inline-block h-2 w-2 rounded-full ${balanced ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                <div className="flex-1">
+                  <p className={`text-sm font-medium ${balanced ? 'text-emerald-900' : 'text-rose-900'}`}>
+                    {balanced ? 'Journal entry is balanced' : 'Journal entry is NOT balanced'}
+                  </p>
+                  <p className={`text-xs ${balanced ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    Total Debit Nu. {totalDebit.toLocaleString()} · Total Credit Nu. {totalCredit.toLocaleString()}
+                    {balanced ? '' : ` · Difference Nu. ${Math.abs(totalDebit - totalCredit).toLocaleString()}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Journal Voucher — Preview</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {months[selectedMonth]} {selectedYear} · {draftPayBillData.length} employees · OPS
+                    </div>
+                  </div>
+                  <div className="font-mono text-[10px] text-slate-400">PRN 2.1 · Booking</div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700">
+                        <th className="border-b border-slate-200 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide">Budget Line</th>
+                        <th className="border-b border-slate-200 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide">UCoA Code</th>
+                        <th className="border-b border-slate-200 px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wide text-blue-700">Debit (Nu.)</th>
+                        <th className="border-b border-slate-200 px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wide text-rose-700">Credit (Nu.)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-blue-50">
+                        <td colSpan={4} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">Debit · Personnel Emoluments (Expense)</td>
+                      </tr>
+                      {debitLines.map((l) => (
+                        <tr key={`d-${l.code}-${l.name}`} className="border-t border-slate-100 hover:bg-blue-50/30">
+                          <td className="px-4 py-2 font-semibold text-slate-800">{l.name}</td>
+                          <td className="px-4 py-2 font-mono text-slate-500">{l.code}</td>
+                          <td className="px-4 py-2 text-right font-mono text-blue-900">{fmt(l.amount)}</td>
+                          <td className="px-4 py-2 text-right font-mono text-slate-300">—</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-rose-50">
+                        <td colSpan={4} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wide text-rose-800">Credit · Statutory Liabilities & Salary Payable</td>
+                      </tr>
+                      {creditLines.map((l) => (
+                        <tr key={`c-${l.code}-${l.name}`} className="border-t border-slate-100 hover:bg-rose-50/30">
+                          <td className="px-4 py-2 font-semibold text-slate-800">{l.name}</td>
+                          <td className="px-4 py-2 font-mono text-slate-500">{l.code}</td>
+                          <td className="px-4 py-2 text-right font-mono text-slate-300">—</td>
+                          <td className="px-4 py-2 text-right font-mono text-rose-900">{fmt(l.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                        <td className="px-4 py-3 text-slate-800" colSpan={2}>TOTAL</td>
+                        <td className="px-4 py-3 text-right font-mono text-blue-900">{totalDebit.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-mono text-rose-900">{totalCredit.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-between pt-4 border-t border-slate-200/50">
+                <button onClick={goPrev} className="px-6 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium transition">← Previous</button>
+                <button
+                  onClick={goNext}
+                  disabled={!balanced}
+                  title={balanced ? '' : 'Journal must balance before booking'}
+                  className="px-6 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  Book & Continue →
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* STEP 7: POST TO MCP */}
         {currentStep === 'post-mcp' && (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">
-                Step 6: POST to MCP
+                POST to MCP
               </h2>
               <p className="text-sm text-slate-600">
-                Submit payroll to Master Chart of Accounts for financial recording.
+                Budget integration and MCP posting status.
               </p>
             </div>
+
+            {/* Budget Head Selection — grouped by Budget Head (mirrors CS) */}
+            {(() => {
+              const budgetHeadOf = (code: string): string => {
+                if (code.startsWith('2110')) return 'Salaries & Wages';
+                if (code.startsWith('2120')) return 'Allowances';
+                if (code.startsWith('221')) return 'Statutory Deductions Payable';
+                if (code.startsWith('222')) return 'OPS Deductions Payable';
+                return 'Other Budget Heads';
+              };
+
+              const itemFor = (code: string) =>
+                ALLOWANCES.find((a) => a.ucoaCode === code) ??
+                DEDUCTIONS.find((d) => d.ucoaCode === code);
+
+              const allCodes = Array.from(
+                new Set(['2110201', ...[...ALLOWANCES, ...DEDUCTIONS].map((i) => i.ucoaCode)]),
+              ).sort();
+
+              const grouped = allCodes.reduce<Record<string, { code: string; label: string }[]>>(
+                (acc, code) => {
+                  const head = budgetHeadOf(code);
+                  const label = code === '2110201' ? 'Salaries (Basic)' : (itemFor(code)?.name ?? '');
+                  (acc[head] ??= []).push({ code, label });
+                  return acc;
+                },
+                {},
+              );
+
+              const headOrder = [
+                'Salaries & Wages',
+                'Allowances',
+                'Statutory Deductions Payable',
+                'OPS Deductions Payable',
+                'Other Budget Heads',
+              ];
+
+              return (
+                <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-slate-900">Budget Head Selection</h3>
+                  <label className="block">
+                    <span className="block text-sm font-semibold text-slate-700 mb-2">Budget Code</span>
+                    <select
+                      value={selectedBudgetHead}
+                      onChange={(e) => setSelectedBudgetHead(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2"
+                    >
+                      {headOrder
+                        .filter((h) => grouped[h]?.length)
+                        .map((head) => (
+                          <optgroup key={head} label={head}>
+                            {grouped[head].map(({ code, label }) => (
+                              <option key={code} value={code}>
+                                {label} — {code}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+              );
+            })()}
 
             {/* Progress Indicator */}
             <div className="space-y-3">
@@ -1091,6 +1405,106 @@ function DraftPayBillStep({ rows, payrollSummary, onPrev, onNext }: DraftPayBill
         >
           Next Step →
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Breakdown popup — shown when a user clicks a Total Allowances (D) or
+   Total Deductions (Y) cell in the OPS Payroll Computation table. Lists
+   each component name, its UCoA code, and the amount.
+   ────────────────────────────────────────────────────────────────────────── */
+interface OpsPayrollBreakdownModalProps {
+  data: {
+    emp: OpsEmployee;
+    allowances: { id: string; name: string; amount: number }[];
+    deductions: { id: string; name: string; amount: number }[];
+    type: 'allowances' | 'deductions';
+  };
+  onClose: () => void;
+}
+
+function OpsPayrollBreakdownModal({ data, onClose }: OpsPayrollBreakdownModalProps) {
+  const { emp, allowances, deductions, type } = data;
+  const isAllowance = type === 'allowances';
+
+  const items = (isAllowance ? allowances : deductions).map((item) => {
+    const allowance = ALLOWANCES.find((a) => a.name === item.name);
+    const deduction = DEDUCTIONS.find((d) => d.name === item.name);
+    const code = allowance?.ucoaCode ?? deduction?.ucoaCode ?? '—';
+    return { code, name: item.name, amount: item.amount };
+  });
+
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  const tone = isAllowance
+    ? { bg: 'bg-blue-50', text: 'text-blue-900', border: 'border-blue-200', pill: 'bg-blue-100 text-blue-800' }
+    : { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-200', pill: 'bg-amber-100 text-amber-800' };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`flex items-start justify-between gap-3 border-b ${tone.border} ${tone.bg} px-6 py-4`}>
+          <div>
+            <div className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${tone.pill}`}>
+              {isAllowance ? 'Allowance Breakdown' : 'Deduction Breakdown'}
+            </div>
+            <h3 className={`mt-1 text-lg font-bold ${tone.text}`}>{emp.firstName} {emp.lastName}</h3>
+            <p className="text-xs text-slate-600">{emp.eid} · {emp.positionTitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-4 py-2 text-left font-bold">Component</th>
+                <th className="px-4 py-2 text-left font-bold">UCoA</th>
+                <th className="px-4 py-2 text-right font-bold">Amount (Nu.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
+                    No {isAllowance ? 'allowances' : 'deductions'} applicable.
+                  </td>
+                </tr>
+              ) : items.map((it) => (
+                <tr key={it.code + it.name} className="border-t border-slate-100">
+                  <td className="px-4 py-2 font-semibold text-slate-800">{it.name}</td>
+                  <td className="px-4 py-2 font-mono text-slate-500">{it.code}</td>
+                  <td className={`px-4 py-2 text-right font-mono ${it.amount === 0 ? 'text-slate-400' : 'text-slate-800'}`}>
+                    {it.amount === 0 ? '—' : it.amount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className={`border-t-2 ${tone.border} ${tone.bg} font-bold`}>
+                <td className={`px-4 py-2.5 ${tone.text}`} colSpan={2}>
+                  {isAllowance ? 'Total Allowances (D)' : 'Total Deductions (Y)'}
+                </td>
+                <td className={`px-4 py-2.5 text-right font-mono ${tone.text}`}>{total.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   );

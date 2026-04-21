@@ -123,6 +123,7 @@ export function PayrollGenerationPage() {
       'system-checks',
       'draft-paybill',
       'finalize',
+      'book-compensation',
       'post-mcp',
     ];
     const idx = steps.indexOf(currentStep);
@@ -138,6 +139,7 @@ export function PayrollGenerationPage() {
       'system-checks',
       'draft-paybill',
       'finalize',
+      'book-compensation',
       'post-mcp',
     ];
     const idx = steps.indexOf(currentStep);
@@ -205,6 +207,7 @@ export function PayrollGenerationPage() {
       { key: 'system-checks', label: 'System Checks' },
       { key: 'draft-paybill', label: 'Draft PayBill' },
       { key: 'finalize', label: 'Finalize Paybill' },
+      { key: 'book-compensation', label: 'Booking Employee Compensation' },
       { key: 'post-mcp', label: 'Post to MCP' },
     ];
 
@@ -669,7 +672,173 @@ export function PayrollGenerationPage() {
   };
 
   /* ───────────────────────────────────────────────────────────────────── */
-  /* Render: Step 4 — Draft PayBill                                       */
+  /* Render: Step 4 — Booking Employee Compensation                       */
+  /*                                                                       */
+  /* Preview of the General Ledger journal voucher that will post once the */
+  /* paybill is finalised. Debits = personnel emoluments (expense budget  */
+  /* lines); credits = statutory liabilities + net salary payable.        */
+  /* Totals must balance before the user can proceed.                      */
+  /* ───────────────────────────────────────────────────────────────────── */
+  const Step4BookCompensation = () => {
+    const aggregate = draftEmployees.reduce(
+      (acc, emp) => {
+        const pay = computeEmployeePay(emp.basicPay, emp.positionLevel);
+        acc.basic += emp.basicPay;
+        acc.le += pay.le;
+        acc.ltc += pay.ltc;
+        acc.lumpSum += pay.lumpSum;
+        acc.indexation += pay.indexation;
+        acc.oneOffFixed += pay.oneOffFixed;
+        acc.pf += pay.pf;
+        acc.gis += pay.gis;
+        acc.hc += pay.hc;
+        acc.tds += pay.tds;
+        acc.csws += pay.csws;
+        acc.net += pay.netPay;
+        return acc;
+      },
+      { basic: 0, le: 0, ltc: 0, lumpSum: 0, indexation: 0, oneOffFixed: 0,
+        pf: 0, gis: 0, hc: 0, tds: 0, csws: 0, net: 0 },
+    );
+
+    const debitLines = [
+      { code: '2110201', name: 'Basic Salary — Civil Service',           amount: aggregate.basic },
+      { code: '2120101', name: 'Leave Encashment (LE)',                  amount: aggregate.le },
+      { code: '2120102', name: 'Leave Travel Concession (LTC)',          amount: aggregate.ltc },
+      { code: '2120125', name: 'Lump Sum Revision (50%)',                amount: aggregate.lumpSum },
+      { code: '2120126', name: 'One-off 5% Indexation',                  amount: aggregate.indexation },
+      { code: '2120127', name: 'One-off Fixed Payment',                  amount: aggregate.oneOffFixed },
+    ];
+    const creditLines = [
+      { code: '22101', name: 'PF Payable — NPPF',                        amount: aggregate.pf },
+      { code: '22102', name: 'GIS Payable — RICBL',                      amount: aggregate.gis },
+      { code: '22103', name: 'HC Payable — DRC',                         amount: aggregate.hc },
+      { code: '22104', name: 'TDS Payable — DRC',                        amount: aggregate.tds },
+      { code: '22105', name: 'CSWS Payable — RCSC',                      amount: aggregate.csws },
+      { code: '22001', name: 'Net Salary Payable — Bank Disbursement',   amount: aggregate.net },
+    ];
+
+    const totalDebit = debitLines.reduce((s, l) => s + l.amount, 0);
+    const totalCredit = creditLines.reduce((s, l) => s + l.amount, 0);
+    const balanced = totalDebit === totalCredit;
+    const fmt = (n: number) => (n === 0 ? '—' : n.toLocaleString());
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="mb-4 text-2xl font-bold text-slate-900">Booking Employee Compensation</h2>
+          <p className="text-slate-600">
+            Draft journal entry preview for this payroll run. Each budget line below records the debit
+            (personnel-emolument expense) and credit (statutory liability or net salary payable) that
+            will post to the General Ledger when the paybill is finalised.
+          </p>
+        </div>
+
+        {/* Balance banner */}
+        <div className={`rounded-2xl border p-4 flex items-center gap-3 ${
+          balanced ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
+        }`}>
+          <span className={`inline-block h-2 w-2 rounded-full ${
+            balanced ? 'bg-emerald-600' : 'bg-rose-600'
+          }`} />
+          <div className="flex-1">
+            <p className={`text-sm font-medium ${balanced ? 'text-emerald-900' : 'text-rose-900'}`}>
+              {balanced ? 'Journal entry is balanced' : 'Journal entry is NOT balanced'}
+            </p>
+            <p className={`text-xs ${balanced ? 'text-emerald-700' : 'text-rose-700'}`}>
+              Total Debit Nu. {totalDebit.toLocaleString()} · Total Credit Nu. {totalCredit.toLocaleString()}
+              {balanced ? '' : ` · Difference Nu. ${Math.abs(totalDebit - totalCredit).toLocaleString()}`}
+            </p>
+          </div>
+        </div>
+
+        {/* Journal voucher */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                Journal Voucher — Preview
+              </div>
+              <div className="mt-0.5 text-sm font-semibold text-slate-800">
+                {months[selectedMonth]} {selectedYear} · {draftEmployees.length} employees
+                {selectedDepartment && selectedDepartment !== 'ALL' && ` · ${selectedDepartment}`}
+              </div>
+            </div>
+            <div className="font-mono text-[10px] text-slate-400">PRN 2.1 · Booking</div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 text-slate-700">
+                  <th className="border-b border-slate-200 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide">Budget Line</th>
+                  <th className="border-b border-slate-200 px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide">UCoA Code</th>
+                  <th className="border-b border-slate-200 px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wide text-blue-700">Debit (Nu.)</th>
+                  <th className="border-b border-slate-200 px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wide text-rose-700">Credit (Nu.)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-blue-50">
+                  <td colSpan={4} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+                    Debit · Personnel Emoluments (Expense)
+                  </td>
+                </tr>
+                {debitLines.map((l) => (
+                  <tr key={`d-${l.code}-${l.name}`} className="border-t border-slate-100 hover:bg-blue-50/30">
+                    <td className="px-4 py-2 font-semibold text-slate-800">{l.name}</td>
+                    <td className="px-4 py-2 font-mono text-slate-500">{l.code}</td>
+                    <td className="px-4 py-2 text-right font-mono text-blue-900">{fmt(l.amount)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-slate-300">—</td>
+                  </tr>
+                ))}
+
+                <tr className="bg-rose-50">
+                  <td colSpan={4} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wide text-rose-800">
+                    Credit · Statutory Liabilities & Salary Payable
+                  </td>
+                </tr>
+                {creditLines.map((l) => (
+                  <tr key={`c-${l.code}-${l.name}`} className="border-t border-slate-100 hover:bg-rose-50/30">
+                    <td className="px-4 py-2 font-semibold text-slate-800">{l.name}</td>
+                    <td className="px-4 py-2 font-mono text-slate-500">{l.code}</td>
+                    <td className="px-4 py-2 text-right font-mono text-slate-300">—</td>
+                    <td className="px-4 py-2 text-right font-mono text-rose-900">{fmt(l.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                  <td className="px-4 py-3 text-slate-800" colSpan={2}>TOTAL</td>
+                  <td className="px-4 py-3 text-right font-mono text-blue-900">{totalDebit.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-mono text-rose-900">{totalCredit.toLocaleString()}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div className="flex justify-between gap-3">
+          <button
+            onClick={goPrev}
+            className="rounded-lg border border-slate-300 text-slate-900 px-6 py-2 font-semibold hover:bg-slate-50"
+          >
+            Back
+          </button>
+          <button
+            onClick={goNext}
+            disabled={!balanced}
+            title={balanced ? '' : 'Journal must balance before booking'}
+            className="rounded-lg bg-blue-500 text-white px-6 py-2 font-semibold disabled:opacity-50 hover:bg-blue-600"
+          >
+            Book & Continue
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* ───────────────────────────────────────────────────────────────────── */
+  /* Render: Step 5 — Draft PayBill                                       */
   /* ───────────────────────────────────────────────────────────────────── */
   const Step4DraftPayBill = () => {
     const ucoaMapping = {
@@ -1031,34 +1200,72 @@ export function PayrollGenerationPage() {
       </div>
 
       {/* Budget Head Selection */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
-        <h3 className="mb-4 text-lg font-semibold text-slate-900">Budget Head Selection</h3>
-        <label className="block">
-          <span className="block text-sm font-semibold text-slate-700 mb-2">
-            Economic Segment UCoA
-          </span>
-          <select
-            value={selectedBudgetHead}
-            onChange={(e) => setSelectedBudgetHead(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-4 py-2"
-          >
-            <option value="2110201">2110201 - Salaries (Basic)</option>
-            {Array.from(new Set([...ALLOWANCES, ...DEDUCTIONS].map(item => item.ucoaCode)))
-              .filter(code => code !== '2110201')
-              .sort()
-              .map(code => {
-                const allowance = ALLOWANCES.find(a => a.ucoaCode === code);
-                const deduction = DEDUCTIONS.find(d => d.ucoaCode === code);
-                const item = allowance || deduction;
-                return (
-                  <option key={code} value={code}>
-                    {code} - {item?.name || ''}
-                  </option>
-                );
-              })}
-          </select>
-        </label>
-      </div>
+      {(() => {
+        /* Map each UCoA code onto a higher-level Budget Head so the dropdown
+           surfaces the Budget Head structure — users pick a named head, not a
+           raw Economic Segment code. */
+        const budgetHeadOf = (code: string): string => {
+          if (code.startsWith('2110')) return 'Salaries & Wages';
+          if (code.startsWith('2120')) return 'Allowances';
+          if (code.startsWith('221')) return 'Statutory Deductions Payable';
+          if (code.startsWith('222')) return 'OPS Deductions Payable';
+          return 'Other Budget Heads';
+        };
+
+        const itemFor = (code: string) =>
+          ALLOWANCES.find((a) => a.ucoaCode === code) ??
+          DEDUCTIONS.find((d) => d.ucoaCode === code);
+
+        const allCodes = Array.from(
+          new Set(['2110201', ...[...ALLOWANCES, ...DEDUCTIONS].map((i) => i.ucoaCode)]),
+        ).sort();
+
+        const grouped = allCodes.reduce<Record<string, { code: string; label: string }[]>>(
+          (acc, code) => {
+            const head = budgetHeadOf(code);
+            const label = code === '2110201' ? 'Salaries (Basic)' : (itemFor(code)?.name ?? '');
+            (acc[head] ??= []).push({ code, label });
+            return acc;
+          },
+          {},
+        );
+
+        const headOrder = [
+          'Salaries & Wages',
+          'Allowances',
+          'Statutory Deductions Payable',
+          'OPS Deductions Payable',
+          'Other Budget Heads',
+        ];
+
+        return (
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
+            <h3 className="mb-4 text-lg font-semibold text-slate-900">Budget Head Selection</h3>
+            <label className="block">
+              <span className="block text-sm font-semibold text-slate-700 mb-2">
+                Budget Code
+              </span>
+              <select
+                value={selectedBudgetHead}
+                onChange={(e) => setSelectedBudgetHead(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-4 py-2"
+              >
+                {headOrder
+                  .filter((h) => grouped[h]?.length)
+                  .map((head) => (
+                    <optgroup key={head} label={head}>
+                      {grouped[head].map(({ code, label }) => (
+                        <option key={code} value={code}>
+                          {label} — {code}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+              </select>
+            </label>
+          </div>
+        );
+      })()}
 
       {/* Bank Validation */}
       <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
@@ -1305,6 +1512,7 @@ export function PayrollGenerationPage() {
           {currentStep === 'select-department' && <Step1SelectDepartment />}
           {currentStep === 'confirm-data' && <Step2ConfirmData />}
           {currentStep === 'system-checks' && <Step3SystemChecks />}
+          {currentStep === 'book-compensation' && <Step4BookCompensation />}
           {currentStep === 'draft-paybill' && <Step4DraftPayBill />}
           {currentStep === 'finalize' && <Step5Finalize />}
           {currentStep === 'post-mcp' && <Step6PostMCP />}

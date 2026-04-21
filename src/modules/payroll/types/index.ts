@@ -219,4 +219,5 @@ export type PayrollGenStep =
   | "system-checks"
   | "draft-paybill"
   | "finalize"
+  | "book-compensation"
   | "post-mcp";

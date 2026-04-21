@@ -19,11 +19,36 @@ export function SidebarItem({ link, standalone, onNavigate, depth = 0 }: Sidebar
   /* Build the agency-scoped path for this link */
   const scopedTo = buildPath(link.to);
 
+  /* Split the configured target into path + query. Children can be
+     disambiguated by query-string (e.g. ?stream=civil-servant vs ?stream=ops)
+     so we need custom active matching — NavLink ignores query strings. */
+  const [linkPath, linkQueryStr = ""] = link.to.split("?");
+  const linkParams = new URLSearchParams(linkQueryStr);
+  const urlParams = new URLSearchParams(location.search);
+
   /* For matching, compare the raw route (stripped of prefix) against the link target */
   const rawPathname = stripPrefix(location.pathname);
 
+  /* True if every query param declared on the link matches the current URL. */
+  const allLinkParamsMatch = Array.from(linkParams.entries()).every(
+    ([k, v]) => urlParams.get(k) === v,
+  );
+
+  /* Does the base path match same-page siblings (to decide whether a plain
+     link without a query should yield to a sibling that carries one)? */
+  const siblingHasQueryMatch =
+    !linkQueryStr && urlParams.toString().length > 0 && rawPathname === linkPath;
+
+  /* Manual active override for query-string links and their plain sibling. */
+  const overrideActive =
+    linkQueryStr.length > 0
+      ? rawPathname === linkPath && allLinkParamsMatch
+      : siblingHasQueryMatch
+        ? false
+        : null;
+
   /* Auto-open the nested group whenever the user is anywhere inside the parent route */
-  const isWithinParent = hasChildren && rawPathname.startsWith(link.to);
+  const isWithinParent = hasChildren && rawPathname.startsWith(linkPath);
   const [open, setOpen] = useState<boolean>(isWithinParent);
 
   useEffect(() => {
@@ -36,13 +61,14 @@ export function SidebarItem({ link, standalone, onNavigate, depth = 0 }: Sidebar
         <NavLink
           to={scopedTo}
           end={!hasChildren && !standalone}
-          className={({ isActive }) =>
-            `flex flex-1 items-center justify-between rounded-lg px-2.5 py-1.5 text-[13px] transition-all duration-150 ${
-              isActive
+          className={({ isActive }) => {
+            const active = overrideActive ?? isActive;
+            return `flex flex-1 items-center justify-between rounded-lg px-2.5 py-1.5 text-[13px] transition-all duration-150 ${
+              active
                 ? "bg-indigo-50 font-semibold text-indigo-700"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-            } ${standalone ? "font-medium" : ""} ${depth > 0 ? "text-[12px]" : ""}`
-          }
+            } ${standalone ? "font-medium" : ""} ${depth > 0 ? "text-[12px]" : ""}`;
+          }}
           onClick={onNavigate}
         >
           <span className="truncate">{link.label}</span>

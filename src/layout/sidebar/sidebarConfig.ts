@@ -12,6 +12,8 @@
    under "Role-gate shortcuts" below.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { CS_SUBNAV } from "../../modules/payroll/shared/navigation/PayrollSubNav";
+
 export interface SidebarLink {
   label: string;
   to: string;
@@ -128,6 +130,20 @@ const CLOSURE_AUTHORISERS = [ROLE_ADMIN, ROLE_HEAD_OF_AGENCY, ROLE_FINANCE];
 
 /* ─── Configuration ─────────────────────────────────────────────────────── */
 
+/* Civil Service workflow children are built from the same source of truth as
+   the on-page PayrollSubNav tiles, so the sidebar always mirrors them. */
+const CS_WORKFLOW_CHILDREN: SidebarLink[] = CS_SUBNAV.map((g) => ({
+  label: `${g.icon}  ${g.label}`,
+  to: g.links[0]?.to ?? "/payroll/management?stream=civil-servant",
+  roleIds: [ROLE_ADMIN, ROLE_HR, ROLE_FINANCE, ROLE_HEAD_OF_AGENCY, ROLE_AUDITOR],
+  children: g.links.map((l) => ({
+    label: l.label,
+    to: l.to,
+    badge: l.badge,
+    roleIds: [ROLE_ADMIN, ROLE_HR, ROLE_FINANCE, ROLE_HEAD_OF_AGENCY, ROLE_AUDITOR],
+  })),
+}));
+
 export const sidebarSections: SidebarSection[] = [
   /* ─────────────────────────────────────────────────────────────────────
      CONTRACTOR MASTER — SRS PRN 1.x
@@ -174,6 +190,13 @@ export const sidebarSections: SidebarSection[] = [
         badge: "SRS v1.1",
         roleIds: PAYROLL_ACTORS,
         children: [
+          {
+            label: "Civil Service",
+            to: "/payroll/management?stream=civil-servant",
+            roleIds: PAYROLL_ACTORS,
+            children: CS_WORKFLOW_CHILDREN,
+          },
+          { label: "Other Public Service", to: "/payroll/management?stream=ops", roleIds: PAYROLL_ACTORS },
           { label: "Allowance Configuration", to: "/payroll/allowance-config", badge: "PRN 1.2", roleIds: PAYROLL_ACTORS },
           { label: "Pay Scale Master", to: "/payroll/pay-scale", badge: "DDi 3.x", roleIds: PAYROLL_ACTORS },
           { label: "Payslip Generation", to: "/payroll/payslip", badge: "PRN 8.x", roleIds: PAYROLL_ACTORS },
