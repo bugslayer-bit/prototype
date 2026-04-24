@@ -114,16 +114,28 @@ function EmptyState() {
 export function PayslipCard({ doc }: PayslipCardProps) {
   if (!doc) return <EmptyState />;
 
+  const isLast = doc.variant === "last";
+  const variantLabel = isLast
+    ? `Last Payslip${doc.separation?.type ? ` — ${doc.separation.type}` : ""}`
+    : "Payslip";
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
+      {/* Last Payslip ribbon */}
+      {isLast && (
+        <div className="mb-4 -mx-6 -mt-6 rounded-t-2xl bg-gradient-to-r from-rose-600 to-orange-500 px-6 py-2 text-center text-[11px] font-black uppercase tracking-[0.22em] text-white">
+          Last Payslip{doc.separation ? ` · ${doc.separation.type}` : ""}
+        </div>
+      )}
+
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between border-b border-slate-200 pb-4">
+      <div className="mb-3 flex items-start justify-between border-b border-slate-200 pb-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900">
             {doc.employee.agencyName}
           </h2>
           <p className="text-xs uppercase tracking-wider text-slate-500">
-            Payslip · {doc.period.label}
+            {variantLabel} · {doc.period.label}
           </p>
         </div>
         <div className="text-right text-xs text-slate-600">
@@ -131,6 +143,17 @@ export function PayslipCard({ doc }: PayslipCardProps) {
           <p>Ref: {doc.refId}</p>
         </div>
       </div>
+
+      {/* Purpose banner (only when we have one — always for "last") */}
+      {doc.separation?.purpose && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+          <span className="font-bold">{doc.separation.purpose}</span>
+          <span className="ml-2 text-xs text-rose-700">
+            Separation date: {doc.separation.date} · Worked {doc.separation.workedDays}/{doc.separation.monthDays} days
+            {" "}({Math.round(doc.separation.prorationFactor * 100)}% proration applied)
+          </span>
+        </div>
+      )}
 
       <div className="mb-6">
         <EmployeeMeta doc={doc} />
@@ -185,8 +208,43 @@ export function PayslipCard({ doc }: PayslipCardProps) {
         </div>
       </div>
 
+      {/* Separation block — only for Last Payslip */}
+      {doc.separation && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/60 p-3 text-sm">
+          <div className="mb-1 text-[11px] font-bold uppercase text-rose-700">
+            Separation Details
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] text-slate-500">Type</div>
+              <div className="font-semibold text-slate-900">{doc.separation.type}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500">Date</div>
+              <div className="font-mono font-semibold text-slate-900">{doc.separation.date}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500">Days Worked</div>
+              <div className="font-semibold text-slate-900">
+                {doc.separation.workedDays} of {doc.separation.monthDays}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500">Proration</div>
+              <div className="font-semibold text-slate-900">
+                {Math.round(doc.separation.prorationFactor * 100)}%
+              </div>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-rose-800">
+            Per SRS: this Last Payslip closes out the pay period for the employee's final month of service.
+            Earnings + PF / HC / TDS are scaled by the proration factor; GIS and CSWS remain at full-month rate.
+          </p>
+        </div>
+      )}
+
       <div className="border-t border-slate-200 pt-3 text-[11px] text-slate-500">
-        <p>Electronically generated payslip. No signature required.</p>
+        <p>Electronically generated {doc.variant === "last" ? "Last " : ""}payslip. No signature required.</p>
         <p className="mt-0.5">Generated on {todayLong()}</p>
       </div>
     </section>

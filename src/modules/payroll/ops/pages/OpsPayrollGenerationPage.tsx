@@ -1092,6 +1092,14 @@ export function OpsPayrollGenerationPage() {
               </p>
             </div>
 
+            {/* SRS Note */}
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm text-amber-900">
+                <strong>SRS Note:</strong> MCP report will include Name, CID, Designation, Bank Account,
+                and Net Pay for each employee.
+              </p>
+            </div>
+
             {/* Budget Head Selection — grouped by Budget Head (mirrors CS) */}
             {(() => {
               const budgetHeadOf = (code: string): string => {

@@ -26,7 +26,14 @@ import { MUSTERROLL_PROJECTS, MUSTERROLL_BENEFICIARIES, computeTDS } from '../st
  * - UCoA posting entries (Debit: Expenditure, Credit: Bank/Payable)
  * - Transaction reference generation
  */
-export function MusterRollPaymentPage() {
+export interface MusterRollPaymentPageProps {
+  /** Pre-select a project when opened from the Creation tab's
+   *  "Proceed to Payment" button. */
+  initialProjectId?: string;
+}
+
+export function MusterRollPaymentPage(props: MusterRollPaymentPageProps = {}) {
+  const { initialProjectId } = props;
   const auth = useAuth();
   const agency = resolveAgencyContext(auth.activeAgencyCode);
   const caps = usePayrollRoleCapabilities();
@@ -36,7 +43,13 @@ export function MusterRollPaymentPage() {
   /* State Management                                                      */
   /* ───────────────────────────────────────────────────────────────────── */
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(initialProjectId ?? '');
+
+  /* Sync with prop changes (e.g. user triggers another Proceed to Payment
+     from the Creation tab with a different project). */
+  React.useEffect(() => {
+    if (initialProjectId) setSelectedProjectId(initialProjectId);
+  }, [initialProjectId]);
   const [paymentMonth, setPaymentMonth] = useState(new Date().getMonth() + 1);
   const [paymentYear, setPaymentYear] = useState(new Date().getFullYear());
 
@@ -56,9 +69,11 @@ export function MusterRollPaymentPage() {
   /* Derived State: Filtered Projects & Beneficiaries                      */
   /* ───────────────────────────────────────────────────────────────────── */
   const filteredProjects = useMemo(() => {
-    return MUSTERROLL_PROJECTS.filter(
-      (p) => p.agencyCode === auth.activeAgencyCode && p.status === 'active'
-    );
+    const activeProjects = MUSTERROLL_PROJECTS.filter((p) => p.status === 'active');
+    const forAgency = activeProjects.filter((p) => p.agencyCode === auth.activeAgencyCode);
+    /* Prototype fallback — if the current agency has no seeded project,
+       surface all active projects so the page always has demo data. */
+    return forAgency.length > 0 ? forAgency : activeProjects;
   }, [auth.activeAgencyCode]);
 
   const selectedProject = useMemo(
@@ -76,6 +91,38 @@ export function MusterRollPaymentPage() {
   /* ───────────────────────────────────────────────────────────────────── */
   /* Step 1: System Validation Checks                                      */
   /* ───────────────────────────────────────────────────────────────────── */
+  interface BankCheckRow {
+    beneficiary: MusterRollBeneficiary;
+    valid: boolean;
+    reason: string;
+  }
+
+  /* Per-beneficiary bank verification — split into verified / unverified so
+     the UI can list the failures and let the user proceed with only the
+     verified set. */
+  const bankCheckRows = useMemo<BankCheckRow[]>(() => {
+    return projectBeneficiaries.map((b) => {
+      if (!b.bankName) return { beneficiary: b, valid: false, reason: 'Bank name missing' };
+      if (!b.bankAccountNo) return { beneficiary: b, valid: false, reason: 'Bank account number missing' };
+      const result = validateBankDetails(b.bankName, b.bankBranch, b.bankAccountNo);
+      if (result.valid) return { beneficiary: b, valid: true, reason: 'Verified' };
+      return { beneficiary: b, valid: false, reason: result.errors[0] ?? 'Bank details failed verification' };
+    });
+  }, [projectBeneficiaries]);
+
+  const verifiedBeneficiaries = useMemo(
+    () => bankCheckRows.filter((r) => r.valid).map((r) => r.beneficiary),
+    [bankCheckRows],
+  );
+  const unverifiedBeneficiaries = useMemo(
+    () => bankCheckRows.filter((r) => !r.valid),
+    [bankCheckRows],
+  );
+
+  /* When unverified rows exist, the user can opt-in to skip them and pay only
+     the verified set. The unverified ones are deferred to the next cycle. */
+  const [skipUnverified, setSkipUnverified] = useState(false);
+
   const validationChecks = useMemo(() => {
     if (!selectedProject) {
       return {
@@ -84,22 +131,20 @@ export function MusterRollPaymentPage() {
         bankVerified: false,
       };
     }
-
-    /* Bank verification — validate every beneficiary against the bank hierarchy */
-    const bankVerified = projectBeneficiaries.every((b) => {
-      if (!b.bankAccountNo || !b.bankName) return false;
-      const result = validateBankDetails(b.bankName, b.bankBranch, b.bankAccountNo);
-      return result.valid;
-    });
-
     return {
       budgetAvailable: true, // Simulated: assume budget exists
       activeBeneficiaries: projectBeneficiaries.length > 0,
-      bankVerified,
+      bankVerified: unverifiedBeneficiaries.length === 0,
     };
-  }, [selectedProject, projectBeneficiaries]);
+  }, [selectedProject, projectBeneficiaries, unverifiedBeneficiaries]);
 
-  const allValidationsPassed = Object.values(validationChecks).every((v) => v);
+  /* The user can advance when every validation passed OR they've opted in to
+     skip unverified (and at least one verified beneficiary remains). */
+  const allValidationsPassed =
+    validationChecks.budgetAvailable &&
+    validationChecks.activeBeneficiaries &&
+    (validationChecks.bankVerified ||
+      (skipUnverified && verifiedBeneficiaries.length > 0));
 
   /* ───────────────────────────────────────────────────────────────────── */
   /* Step 2: PayBill Computation                                           */
@@ -118,8 +163,16 @@ export function MusterRollPaymentPage() {
     bankAccountNo: string;
   }
 
+  /* Only include verified beneficiaries in the paybill when the user has
+     opted to skip unverified. Otherwise include all (validation gate will
+     prevent advancement anyway). */
+  const eligibleBeneficiaries = useMemo(
+    () => (skipUnverified ? verifiedBeneficiaries : projectBeneficiaries),
+    [skipUnverified, verifiedBeneficiaries, projectBeneficiaries],
+  );
+
   const payBillRows = useMemo<PayBillRow[]>(() => {
-    return projectBeneficiaries.map((b) => {
+    return eligibleBeneficiaries.map((b) => {
       const days = daysWorked[b.id] ?? 22; // Default 22 days for monthly
       const gross = b.dailyWage * days;
       const tds = computeTDS(gross);
@@ -139,7 +192,7 @@ export function MusterRollPaymentPage() {
         bankAccountNo: b.bankAccountNo,
       };
     });
-  }, [projectBeneficiaries, daysWorked]);
+  }, [eligibleBeneficiaries, daysWorked]);
 
   const payBillTotals = useMemo(() => {
     return {
@@ -421,45 +474,164 @@ export function MusterRollPaymentPage() {
 
           {/* Bank Details Verified */}
           <div
-            className={`flex items-center p-4 rounded-lg mb-3 border transition-colors ${
+            className={`p-4 rounded-lg mb-3 border transition-colors ${
               validationChecks.bankVerified
                 ? 'bg-green-50 border-green-200'
-                : 'bg-red-50 border-red-200'
+                : skipUnverified
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-red-50 border-red-200'
             }`}
           >
-            <div
-              className={`w-6 h-6 rounded-full text-white flex items-center justify-center mr-3 text-sm font-bold flex-shrink-0 ${
-                validationChecks.bankVerified
-                  ? 'bg-green-500'
-                  : 'bg-red-500'
-              }`}
-            >
-              {validationChecks.bankVerified ? '✓' : '!'}
-            </div>
-            <div>
+            <div className="flex items-center">
               <div
-                className={`text-sm font-semibold ${
+                className={`w-6 h-6 rounded-full text-white flex items-center justify-center mr-3 text-sm font-bold flex-shrink-0 ${
                   validationChecks.bankVerified
-                    ? 'text-green-900'
-                    : 'text-red-900'
+                    ? 'bg-green-500'
+                    : skipUnverified
+                      ? 'bg-amber-500'
+                      : 'bg-red-500'
                 }`}
               >
-                Bank Details Verified
+                {validationChecks.bankVerified ? '✓' : skipUnverified ? '⚠' : '!'}
               </div>
-              <div
-                className={`text-xs mt-1 ${
-                  validationChecks.bankVerified
-                    ? 'text-green-700'
-                    : 'text-red-600'
-                }`}
-              >
-                {validationChecks.bankVerified
-                  ? 'All bank account details verified'
-                  : 'Some bank details are missing'}
+              <div className="flex-1">
+                <div
+                  className={`text-sm font-semibold ${
+                    validationChecks.bankVerified
+                      ? 'text-green-900'
+                      : skipUnverified
+                        ? 'text-amber-900'
+                        : 'text-red-900'
+                  }`}
+                >
+                  Bank Details Verified
+                  {selectedProject && projectBeneficiaries.length > 0 && (
+                    <span className="ml-2 text-[11px] font-normal text-slate-600">
+                      · {verifiedBeneficiaries.length} of {projectBeneficiaries.length} verified
+                    </span>
+                  )}
+                </div>
+                <div
+                  className={`text-xs mt-1 ${
+                    validationChecks.bankVerified
+                      ? 'text-green-700'
+                      : skipUnverified
+                        ? 'text-amber-700'
+                        : 'text-red-600'
+                  }`}
+                >
+                  {validationChecks.bankVerified
+                    ? 'All bank account details verified'
+                    : skipUnverified
+                      ? `Proceeding with ${verifiedBeneficiaries.length} verified beneficiaries. ${unverifiedBeneficiaries.length} unverified will be deferred to the next payment cycle.`
+                      : `Bank verification failed for ${unverifiedBeneficiaries.length} beneficiaries — review below.`}
+                </div>
               </div>
             </div>
+
+            {/* Unverified list — shown when there are failures */}
+            {unverifiedBeneficiaries.length > 0 && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Unverified bank details ({unverifiedBeneficiaries.length})
+                  </div>
+                  {!skipUnverified && verifiedBeneficiaries.length > 0 && (
+                    <button
+                      onClick={() => setSkipUnverified(true)}
+                      className="rounded bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
+                    >
+                      Proceed with {verifiedBeneficiaries.length} verified only →
+                    </button>
+                  )}
+                  {skipUnverified && (
+                    <button
+                      onClick={() => setSkipUnverified(false)}
+                      className="rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Undo skip
+                    </button>
+                  )}
+                </div>
+                <table className="w-full text-[12px]">
+                  <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-3 py-1.5">Name</th>
+                      <th className="px-3 py-1.5">CID / WP</th>
+                      <th className="px-3 py-1.5">Bank</th>
+                      <th className="px-3 py-1.5">Account No.</th>
+                      <th className="px-3 py-1.5">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {unverifiedBeneficiaries.map((row) => (
+                      <tr key={row.beneficiary.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-1.5 font-medium text-slate-900">{row.beneficiary.name}</td>
+                        <td className="px-3 py-1.5 font-mono text-slate-700">{row.beneficiary.cid}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{row.beneficiary.bankName || '—'}</td>
+                        <td className="px-3 py-1.5 font-mono text-slate-700">{row.beneficiary.bankAccountNo || '—'}</td>
+                        <td className="px-3 py-1.5 text-rose-700">{row.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+                  Unverified beneficiaries remain on hold until their bank account is updated. Deferred
+                  wages will roll over to the next payment cycle.
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Beneficiary roster — visible reference list while processing. */}
+        {selectedProject && eligibleBeneficiaries.length > 0 && (
+          <div className="rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-slate-900">
+                Beneficiaries to be paid
+                <span className="ml-2 text-xs font-normal text-slate-500">
+                  {eligibleBeneficiaries.length} eligible · {skipUnverified ? `${unverifiedBeneficiaries.length} deferred` : 'all verified'}
+                </span>
+              </h2>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full text-[12px]">
+                <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-3 py-1.5">#</th>
+                    <th className="px-3 py-1.5">Name</th>
+                    <th className="px-3 py-1.5">CID / WP</th>
+                    <th className="px-3 py-1.5">Type</th>
+                    <th className="px-3 py-1.5">Bank</th>
+                    <th className="px-3 py-1.5 text-right">Daily Wage</th>
+                    <th className="px-3 py-1.5">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {eligibleBeneficiaries.map((b, idx) => (
+                    <tr key={b.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                      <td className="px-3 py-1.5 font-medium text-slate-900">{b.name}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-700">{b.cid}</td>
+                      <td className="px-3 py-1.5 capitalize text-slate-700">{b.beneficiaryType}</td>
+                      <td className="px-3 py-1.5 text-slate-700">
+                        {b.bankName}
+                        <span className="ml-1 font-mono text-[10px] text-slate-500">{b.bankAccountNo}</span>
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">Nu. {b.dailyWage.toLocaleString()}</td>
+                      <td className="px-3 py-1.5">
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          verified
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Card: Project Selection */}
         <div className="rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur shadow-xl p-8 mb-6">

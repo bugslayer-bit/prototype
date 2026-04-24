@@ -408,11 +408,18 @@ const SHARED_LOV_DEFINITIONS: Record<string, string[]> = {
     "Sabbatical Leave",
   ],
   separationTypes: [
-    "Resignation",
+    "Superannuation",
+    "Voluntary Resignation",
+    "Early Retirement Scheme",
+    "Special Retirement Scheme",
+    "Compulsory Retirement",
     "Termination",
-    "Retirement",
+    "Agency Severance",
+    "Transfer",
     "Medical Termination",
     "End of Contract",
+    "Dismissal",
+    "Deceased",
   ],
   payFixationTypes: [
     "On Initial Appointment",
@@ -1021,14 +1028,14 @@ export function PayrollManagementPage() {
                     <h1 className="text-center text-3xl font-black tracking-tight text-slate-900">
                       Payroll Management
                     </h1>
-                    <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-500">
+                    {/* <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-500">
                       <span className="font-semibold text-slate-700">Home</span>
                       <span>/</span>
                       <span className="font-semibold text-slate-700">Payroll</span>
                       <span>/</span>
                       <span className="font-semibold text-slate-900">Payroll Management</span>
-                    </div>
-                    <CategoryHeaderTabs
+                    </div> */}
+                    {/* <CategoryHeaderTabs
                       selectedCategory={selectedCategory}
                       onSelectCategory={(c) => {
                         setSelectedCategory(c);
@@ -1037,7 +1044,7 @@ export function PayrollManagementPage() {
                       csCount={csCount}
                       opsCount={opsCount}
                       allowedCategories={allowedCategories}
-                    />
+                    /> */}
                   </div>
                   {/* GovTech integration-owner surface — only rendered when
                       active agency is GovTech (code 70). Operating agencies

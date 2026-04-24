@@ -1115,14 +1115,6 @@ export function PayrollGenerationPage() {
         </label>
       </div>
 
-      {/* SRS Note */}
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm text-amber-900">
-          <strong>SRS Note:</strong> MCP report will include Name, CID, Designation, Bank Account,
-          and Net Pay for each employee.
-        </p>
-      </div>
-
       <div className="flex justify-between gap-3">
         <button
           onClick={goPrev}
@@ -1197,6 +1189,14 @@ export function PayrollGenerationPage() {
       <div>
         <h2 className="mb-4 text-2xl font-bold text-slate-900">POST to MCP</h2>
         <p className="text-slate-600">Budget integration and MCP posting status</p>
+      </div>
+
+      {/* SRS Note */}
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm text-amber-900">
+          <strong>SRS Note:</strong> MCP report will include Name, CID, Designation, Bank Account,
+          and Net Pay for each employee.
+        </p>
       </div>
 
       {/* Budget Head Selection */}
@@ -1391,14 +1391,22 @@ export function PayrollGenerationPage() {
       {/* Remittance Summary */}
       {mcpPostingComplete && (
         <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
-          <h3 className="mb-4 text-lg font-semibold text-slate-900">Remittance Summary</h3>
-          <div className="grid gap-3 md:grid-cols-2">
+          <h3 className="mb-2 text-lg font-semibold text-slate-900">Remittance Summary</h3>
+          <p className="mb-4 text-xs text-slate-500">
+            Queued as <strong>pending</strong>. Each body will be auto-posted by IFMIS once MCP releases the
+            salary payment (see Remittances Desk for dispatch status).
+          </p>
+          <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-slate-200 p-4">
-              <div className="text-sm text-slate-600">DRC (TDS + HC)</div>
+              <div className="text-sm text-slate-600">DRC — TDS</div>
               <div className="mt-1 text-2xl font-bold text-slate-900">
-                Nu. {(
-                  draftPayBillData.reduce((sum, r) => sum + r.tds + r.hc, 0)
-                ).toLocaleString()}
+                Nu. {draftPayBillData.reduce((sum, r) => sum + r.tds, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="text-sm text-slate-600">DRC — HC</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">
+                Nu. {draftPayBillData.reduce((sum, r) => sum + r.hc, 0).toLocaleString()}
               </div>
             </div>
             <div className="rounded-lg border border-slate-200 p-4">
@@ -1417,6 +1425,12 @@ export function PayrollGenerationPage() {
               <div className="text-sm text-slate-600">RCSC (CSWS)</div>
               <div className="mt-1 text-2xl font-bold text-slate-900">
                 Nu. {draftPayBillData.reduce((sum, r) => sum + r.csws, 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="text-sm text-slate-600">House Rent (DRC / NHDCL / NPPF)</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">
+                Nu. {draftPayBillData.reduce((sum, r) => sum + (r.houseRent || 0), 0).toLocaleString()}
               </div>
             </div>
           </div>

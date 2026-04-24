@@ -26,6 +26,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
+import { enqueueDispatchesFor, dispatchRemittancesFor } from "./remittanceDispatches";
 
 const STORAGE_KEY = "ifmis.payrollPostings.v1";
 
@@ -123,6 +124,19 @@ export function postPayroll(
   };
   postings = [posting, ...postings];
   emit();
+  /* Auto-enqueue body-specific remittances in "pending" state. They'll be
+     flipped to "dispatched" when MoF marks this posting as paid. */
+  try {
+    enqueueDispatchesFor({
+      journalEntryId: posting.journalEntryId,
+      year: posting.year,
+      month: posting.month,
+      agencyCode: posting.agencyCode,
+      payrollDept: posting.department,
+    });
+  } catch (err) {
+    console.warn("[payrollPostings] failed to enqueue remittances", err);
+  }
   return posting;
 }
 
@@ -148,6 +162,13 @@ export function markAsPaid(
   };
   postings = [...postings.slice(0, idx), updated, ...postings.slice(idx + 1)];
   emit();
+  /* Salary release successful → auto-post every pending remittance for this
+     journal to its destination system (DRC / NPPF / RICBL / RCSC / NHDCL / RAA / RBP). */
+  try {
+    dispatchRemittancesFor(updated.journalEntryId);
+  } catch (err) {
+    console.warn("[payrollPostings] failed to dispatch remittances", err);
+  }
   return updated;
 }
 

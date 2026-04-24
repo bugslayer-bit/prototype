@@ -74,6 +74,8 @@ const OpsScheduleConfigPage = React.lazy(() => import("./modules/payroll/ops/pag
 const OpsPayrollGenerationPage = React.lazy(() => import("./modules/payroll/ops/pages/OpsPayrollGenerationPage").then(m => ({ default: m.OpsPayrollGenerationPage })));
 const OpsSalaryAdvancePage = React.lazy(() => import("./modules/payroll/ops/pages/OpsSalaryAdvancePage").then(m => ({ default: m.OpsSalaryAdvancePage })));
 const OpsTravelClaimPage = React.lazy(() => import("./modules/payroll/ops/pages/OpsTravelClaimPage").then(m => ({ default: m.OpsTravelClaimPage })));
+const OpsTravelPaymentOrderPage = React.lazy(() => import("./modules/payroll/ops/pages/OpsTravelPaymentOrderPage").then(m => ({ default: m.OpsTravelPaymentOrderPage })));
+const OpsTravelPostPaymentPage = React.lazy(() => import("./modules/payroll/ops/pages/OpsTravelPostPaymentPage").then(m => ({ default: m.OpsTravelPostPaymentPage })));
 const PayrollTravelClaimsHubPage = React.lazy(() => import("./modules/payroll/pages/PayrollTravelClaimsHubPage"));
 const PayrollRemittancesHubPage = React.lazy(() => import("./modules/payroll/pages/PayrollRemittancesHubPage"));
 /* OpsMusterRollPage & OpsSittingFeeHonorariumPage — removed; routes now redirect to unified /modules/muster-roll-wages */
@@ -446,6 +448,8 @@ export function App() {
             {/* ── Payroll (HR, Finance, HoA, Admin) — lazy-loaded with error boundary ── */}
             <Route path="payroll/management" element={<RoleGuard allowedRoles={PAYROLL_ROLES}><PayrollLazyPage title="Payroll Management"><PayrollManagementPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/travel-claims" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="Travel Claims"><PayrollTravelClaimsHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/travel-claims/payment-order" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="Travel Payment Order"><OpsTravelPaymentOrderPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/travel-claims/post-payment" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="Travel POST Payment"><OpsTravelPostPaymentPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/remittances" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="Remittances"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/employees" element={<RoleGuard allowedRoles={PAYROLL_ROLES}><PayrollScopeGuard requiredCategory="civil-servant"><PayrollLazyPage title="Employee Registry"><EmployeeRegistryPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
             <Route path="payroll/employee-allowances" element={<RoleGuard allowedRoles={PAYROLL_ROLES}><PayrollScopeGuard requiredCategory="civil-servant"><PayrollLazyPage title="Allowance of Employee"><EmployeeAllowancePage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
@@ -468,6 +472,9 @@ export function App() {
             <Route path="payroll/remittance/gis" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="GIS (RICBL)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/remittance/drc" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="TDS & HC (DRC)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/remittance/rent" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="House Rent"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/remittance/rent/drc" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="House Rent (DRC)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/remittance/rent/nhdcl" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="House Rent (NHDCL)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/remittance/rent/nppf" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="House Rent (NPPF)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/remittance/csws" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="CSWS"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/remittance/audit" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="Audit Recoveries"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/musterroll" element={<AgencyRedirect to="/modules/recurring-vendor-payments/muster-roll-wages" />} />
@@ -482,6 +489,8 @@ export function App() {
             <Route path="payroll/ops/generation" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS Generation"><OpsPayrollGenerationPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
             <Route path="payroll/ops/salary-advance" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS Salary Advance"><OpsSalaryAdvancePage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
             <Route path="payroll/ops/travel-claims" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS Travel Claims"><OpsTravelClaimPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
+            <Route path="payroll/ops/travel-claims/payment-order" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS Travel Payment Order"><OpsTravelPaymentOrderPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
+            <Route path="payroll/ops/travel-claims/post-payment" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS Travel POST Payment"><OpsTravelPostPaymentPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
             <Route path="payroll/ops/musterroll" element={<AgencyRedirect to="/modules/recurring-vendor-payments/muster-roll-wages" />} />
             <Route path="payroll/ops/sitting-fee" element={<AgencyRedirect to="/modules/recurring-vendor-payments/muster-roll-wages" />} />
             <Route path="payroll/ops/hr-actions" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollScopeGuard requiredCategory="other-public-servant"><PayrollLazyPage title="OPS HR Actions"><OpsHrActionsPage /></PayrollLazyPage></PayrollScopeGuard></RoleGuard>} />
@@ -494,7 +503,11 @@ export function App() {
             <Route path="payroll/ops/remittance/gis" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS GIS (RICBL)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/ops/remittance/drc" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS TDS & HC (DRC)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/ops/remittance/rent" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS House Rent"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/ops/remittance/rent/drc" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS House Rent (DRC)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/ops/remittance/rent/nhdcl" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS House Rent (NHDCL)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/ops/remittance/rent/nppf" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS House Rent (NPPF)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
             <Route path="payroll/ops/remittance/audit" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS Audit Recoveries"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
+            <Route path="payroll/ops/remittance/afws" element={<RoleGuard allowedRoles={[...PAYROLL_ROLES, "role-auditor"]}><PayrollLazyPage title="OPS AFWS (RBP)"><PayrollRemittancesHubPage /></PayrollLazyPage></RoleGuard>} />
 
             {/* ── Public self-service ── */}
             <Route path="public/payslip" element={<PublicPayslipPage />} />

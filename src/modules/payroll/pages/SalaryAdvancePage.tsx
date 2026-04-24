@@ -182,25 +182,6 @@ export function SalaryAdvancePage() {
     setView('list');
   };
 
-  const handleReject = () => {
-    if (!selectedAdvance) return;
-
-    const updatedAdvance = {
-      ...selectedAdvance,
-      status: 'rejected' as const,
-    };
-
-    // Update in list (in production, would POST to API)
-    const advanceIndex = SALARY_ADVANCES.findIndex((a) => a.id === selectedAdvanceId);
-    if (advanceIndex !== -1) {
-      SALARY_ADVANCES[advanceIndex] = updatedAdvance;
-    }
-
-    showToast('Advance rejected');
-    setApprovalComment('');
-    setView('list');
-  };
-
   const handleNewRequest = () => {
     if (!newRequestEmployee || newRequestAmount <= 0 || !newRequestReason || newRequestDeduction <= 0) {
       showToast('Please fill all required fields');
@@ -558,63 +539,17 @@ export function SalaryAdvancePage() {
         <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
           <h3 className="text-lg font-bold text-slate-900">Validation Checklist</h3>
           <div className="mt-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
-              <span className="text-sm text-slate-900">No prior pending advances</span>
+            <div className="flex items-start gap-2">
+              <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
+              <span className="text-sm text-slate-900">No prior salary advances pending for settlement</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
-              <span className="text-sm text-slate-900">Within maximum amount limit (2 months gross)</span>
+            <div className="flex items-start gap-2">
+              <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
+              <span className="text-sm text-slate-900">Within the criteria configured in the Employee Advance Master (Process Step no. 1)</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
-              <span className="text-sm text-slate-900">Employee not suspended or separated</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
-              <span className="text-sm text-slate-900">Deduction schedule within salary capacity</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Deduction Breakdown with UCoA Codes */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur shadow-sm p-6">
-          <h3 className="text-lg font-bold text-slate-900">Deduction Breakdown</h3>
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-slate-200">
-              <div>
-                <span className="text-sm font-medium text-slate-900">Provident Fund (PF)</span>
-                <span className="text-xs text-slate-500 ml-2">(22101)</span>
-              </div>
-              <span className="text-xs text-slate-600 font-mono">Configured</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-200">
-              <div>
-                <span className="text-sm font-medium text-slate-900">Group Insurance Scheme (GIS)</span>
-                <span className="text-xs text-slate-500 ml-2">(22102)</span>
-              </div>
-              <span className="text-xs text-slate-600 font-mono">Configured</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-200">
-              <div>
-                <span className="text-sm font-medium text-slate-900">Health Cover (HC)</span>
-                <span className="text-xs text-slate-500 ml-2">(22103)</span>
-              </div>
-              <span className="text-xs text-slate-600 font-mono">Configured</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-200">
-              <div>
-                <span className="text-sm font-medium text-slate-900">Tax Deducted at Source (TDS)</span>
-                <span className="text-xs text-slate-500 ml-2">(22104)</span>
-              </div>
-              <span className="text-xs text-slate-600 font-mono">Configured</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <span className="text-sm font-medium text-slate-900">Contingency Salary Welfare Scheme (CSWS)</span>
-                <span className="text-xs text-slate-500 ml-2">(22105)</span>
-              </div>
-              <span className="text-xs text-slate-600 font-mono">Configured</span>
+            <div className="flex items-start gap-2">
+              <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs">✓</span>
+              <span className="text-sm text-slate-900">Employee is not under suspension or other restrictions disqualifying for salary advances under Salary Advance Detail</span>
             </div>
           </div>
         </div>
@@ -643,13 +578,6 @@ export function SalaryAdvancePage() {
                   className="rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Approve Advance
-                </button>
-                <button
-                  onClick={handleReject}
-                  disabled={!caps.canApprove}
-                  className="rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm bg-rose-600 text-white hover:bg-rose-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Reject Request
                 </button>
               </div>
             </div>
@@ -753,9 +681,6 @@ export function SalaryAdvancePage() {
               <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-3 text-sm">
                 <p className="font-medium text-indigo-900">
                   Gross Pay: Nu.{selectedEmployee.grossPay.toLocaleString()}
-                </p>
-                <p className="text-xs text-indigo-700 mt-1">
-                  Max Advance: Nu.{(selectedEmployee.grossPay * advanceRules.maxAmountMonths).toLocaleString()}
                 </p>
               </div>
             )}

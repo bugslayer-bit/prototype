@@ -1,210 +1,312 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Payroll Remittances Hub — dynamic landing
-   ───────────────────────────────────────────────────────────────────
-   Consolidated Remittances desk. For every statutory / regulatory stream
-   (PF, GIS, TDS, Health Contribution, House Rent, CSWS, Audit Recoveries)
-   this page computes month-end totals directly from the live ZESt
-   Civil-Servant and OPS employee masters using the Paybill Standard
-   formulae. Nothing is hard-coded.
+   Payroll Remittances — Per-Stream Schedule Page
+   ─────────────────────────────────────────────
+   A single routed page used by all ten remittance sidebar entries. It picks
+   which schedule to render from the URL (via scheduleKeyForPath) and exposes
+   month / year / agency selectors so the user can pull historical data.
+   Column layouts follow the Paybill Formulae.xlsx sheets for each stream.
    ═══════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
-import { EMPLOYEES, computeEmployeePay } from "../state/payrollSeed";
-import { OPS_EMPLOYEES } from "../ops/data/opsEmployeeSeed";
+import { useLocation } from "react-router-dom";
+import { REMITTANCE_DESTINATIONS, type RemittanceStreamKey } from "../state/paybillStandard";
+import {
+  buildSchedule,
+  downloadScheduleCsv,
+  scheduleKeyForPath,
+  type ScheduleView,
+  type ScheduleViewKey,
+} from "../state/remittanceSchedules";
+import { useRemittanceDispatches } from "../state/remittanceDispatches";
+import { AGENCIES, DEMO_AGENCY_CODES } from "../../../shared/data/agencyPersonas";
 
-type StreamKey = "pf" | "gis" | "tds" | "hc" | "rent" | "csws" | "audit";
-
-interface Stream {
-  key: StreamKey;
-  label: string;
-  regulator: string;
-  circular: string;
-  tone: string;
-  dueDay: number;
-}
-
-const STREAMS: Stream[] = [
-  { key: "pf",    label: "Provident Fund (PF)",          regulator: "NPPF",     circular: "DDi 8.1", tone: "from-emerald-50 to-white border-emerald-200",   dueDay: 7 },
-  { key: "gis",   label: "Group Insurance Scheme (GIS)", regulator: "RICBL",    circular: "DDi 8.2", tone: "from-sky-50 to-white border-sky-200",           dueDay: 10 },
-  { key: "tds",   label: "Tax Deducted at Source (TDS)", regulator: "DRC",      circular: "DDi 8.3", tone: "from-indigo-50 to-white border-indigo-200",     dueDay: 10 },
-  { key: "hc",    label: "Health Contribution (HC)",     regulator: "DRC",      circular: "DDi 8.4", tone: "from-rose-50 to-white border-rose-200",         dueDay: 10 },
-  { key: "rent",  label: "House Rent",                   regulator: "DRC / NHDCL", circular: "DDi 8.5", tone: "from-amber-50 to-white border-amber-200",    dueDay: 15 },
-  { key: "csws",  label: "CSWS",                         regulator: "RCSC",     circular: "DDi 8.6", tone: "from-blue-50 to-white border-blue-200",         dueDay: 15 },
-  { key: "audit", label: "Audit Recoveries",             regulator: "RAA",      circular: "DDi 8.7", tone: "from-slate-50 to-white border-slate-200",       dueDay: 20 },
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 const nu = (n: number) => `Nu. ${Math.round(n).toLocaleString("en-IN")}`;
 
-function firstOfNextMonth(dueDay: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(dueDay);
-  return d.toISOString().slice(0, 10);
-}
-
 export default function PayrollRemittancesHubPage() {
-  const [expanded, setExpanded] = useState<StreamKey | null>("pf");
+  const location = useLocation();
+  const streamKey: ScheduleViewKey = scheduleKeyForPath(location.pathname);
 
-  /* ── Live aggregation from employee masters ───────────────────────────── */
-  const totals = useMemo(() => {
-    const agg: Record<StreamKey, { csEmployeeAmount: number; csEmployerAmount: number; opsAmount: number; heads: number }> = {
-      pf:    { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      gis:   { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      tds:   { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      hc:    { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      rent:  { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      csws:  { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-      audit: { csEmployeeAmount: 0, csEmployerAmount: 0, opsAmount: 0, heads: 0 },
-    };
+  /* ── Pickers — default to current period + "All Agencies". ────────────── */
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
+  const [agencyCode, setAgencyCode] = useState<string>("all");
 
-    EMPLOYEES.forEach((e) => {
-      if (e.status && e.status !== "active") return;
-      const pay = computeEmployeePay(e.basicPay, e.positionLevel);
-      agg.pf.csEmployeeAmount  += pay.pf;
-      agg.pf.csEmployerAmount  += Math.round(e.basicPay * 0.15); // Employer 15 %
-      agg.gis.csEmployeeAmount += pay.gis;
-      agg.tds.csEmployeeAmount += pay.tds;
-      agg.hc.csEmployeeAmount  += pay.hc;
-      agg.csws.csEmployeeAmount += pay.csws;
-      /* House rent — staff in gov housing pay 10 % of basic (proxy: every 4th emp) */
-      if ((parseInt(e.id.slice(-3), 10) % 4) === 0) agg.rent.csEmployeeAmount += Math.round(e.basicPay * 0.10);
-      /* Audit recoveries — proxy 1 % of basic for 3 % of active staff */
-      if ((parseInt(e.id.slice(-3), 10) % 33) === 0) agg.audit.csEmployeeAmount += Math.round(e.basicPay * 0.01);
-      Object.values(agg).forEach((row) => (row.heads += 1 / 7));
-    });
-
-    OPS_EMPLOYEES.forEach((e) => {
-      if (e.status && e.status !== "active") return;
-      const basic = e.monthlyBasicPay || 0;
-      agg.pf.opsAmount   += Math.round(basic * 0.10);
-      agg.gis.opsAmount  += 100;
-      agg.tds.opsAmount  += Math.round(basic * 0.05);
-      agg.hc.opsAmount   += Math.round(basic * 0.01);
-      if ((parseInt(e.masterEmpId.slice(-3), 10) % 4) === 0) agg.rent.opsAmount += Math.round(basic * 0.10);
-    });
-
-    return agg;
+  const agencyOptions = useMemo(() => {
+    const filter = DEMO_AGENCY_CODES.length > 0 ? new Set(DEMO_AGENCY_CODES) : null;
+    return AGENCIES.filter((a) => !filter || filter.has(a.code))
+      .filter((a) => a.code !== "EXT" && a.code !== "FI" && a.code !== "MR" && !a.code.startsWith("UP-"))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 
-  const grandTotal = useMemo(() => {
-    return STREAMS.reduce((s, st) => {
-      const t = totals[st.key];
-      return s + t.csEmployeeAmount + t.csEmployerAmount + t.opsAmount;
-    }, 0);
-  }, [totals]);
+  const view: ScheduleView = useMemo(
+    () => buildSchedule(streamKey, { year, month, agencyCode }),
+    [streamKey, year, month, agencyCode],
+  );
 
-  const periodLabel = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  }, []);
+  /* ── Dispatch status (auto-post tracking) — only relevant for true
+       remittance streams (not paybillRecoveries / cmReport). */
+  const dispatches = useRemittanceDispatches();
+  const disp = useMemo(() => {
+    if (!isRemittanceStream(streamKey)) return null;
+    const rel = dispatches.filter((d) => d.streamKey === streamKey);
+    return rel.reduce(
+      (acc, d) => {
+        acc[d.status] = (acc[d.status] ?? 0) + 1;
+        acc.total += 1;
+        return acc;
+      },
+      { pending: 0, dispatched: 0, failed: 0, total: 0 } as Record<string, number>,
+    );
+  }, [dispatches, streamKey]);
 
-  const activeCs = EMPLOYEES.filter((e) => !e.status || e.status === "active").length;
-  const activeOps = OPS_EMPLOYEES.filter((e) => !e.status || e.status === "active").length;
+  const years = useMemo(() => {
+    const y: number[] = [];
+    for (let i = now.getFullYear() - 2; i <= now.getFullYear() + 1; i++) y.push(i);
+    return y;
+  }, [now]);
+
+  const pageTitle = titleForStream(streamKey);
 
   return (
     <div className="px-4 py-6 lg:px-8">
-      {/* Hero */}
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-6 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-widest text-emerald-700">Payroll · Remittances</div>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">Remittances Desk — {periodLabel}</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Live month-end statutory obligations computed directly from the ZESt ({activeCs} active) and OPS
-              ({activeOps} active) employee masters using Paybill Standard formulae (§ 4). Figures refresh when
-              the employee master changes.
-            </p>
+      {/* Header */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+            Payroll · Remittances POSTING
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-right shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Total to remit</div>
-            <div className="mt-1 text-2xl font-black text-emerald-700">{nu(grandTotal)}</div>
-            <div className="mt-1 text-[11px] text-slate-500">across {STREAMS.length} streams</div>
-          </div>
+          <h1 className="mt-0.5 text-2xl font-bold text-slate-900">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            {subtitleForStream(streamKey)}
+          </p>
         </div>
+        {disp && disp.total > 0 && <DispatchBadge disp={disp} />}
       </div>
 
-      {/* Stream cards */}
-      <div className="space-y-3">
-        {STREAMS.map((st) => {
-          const t = totals[st.key];
-          const streamTotal = t.csEmployeeAmount + t.csEmployerAmount + t.opsAmount;
-          const isOpen = expanded === st.key;
-          return (
-            <div
-              key={st.key}
-              className={`overflow-hidden rounded-2xl border bg-gradient-to-br ${st.tone} shadow-sm transition`}
-            >
-              <button
-                onClick={() => setExpanded(isOpen ? null : st.key)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-              >
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{st.circular}</span>
-                    <span className="rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                      {st.regulator}
-                    </span>
-                  </div>
-                  <span className="mt-0.5 text-base font-bold text-slate-900">{st.label}</span>
-                  <span className="mt-0.5 text-[11px] text-slate-500">
-                    Due: {firstOfNextMonth(st.dueDay)}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">This period</div>
-                  <div className="text-xl font-bold tabular-nums text-slate-900">{nu(streamTotal)}</div>
-                </div>
-                <span className="ml-2 text-slate-400">{isOpen ? "▾" : "▸"}</span>
-              </button>
+      {/* Selectors */}
+      <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[180px_140px_1fr_auto] md:items-end">
+        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+          <span>Agency</span>
+          <select
+            value={agencyCode}
+            onChange={(e) => setAgencyCode(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+          >
+            <option value="all">All Agencies</option>
+            {agencyOptions.map((a) => (
+              <option key={a.code} value={a.code}>
+                {a.code} — {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+          <span>Year</span>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+          >
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+          <span>Month</span>
+          <select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+          >
+            {MONTH_NAMES.map((m, i) => (
+              <option key={m} value={i + 1}>{m}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          onClick={() => downloadScheduleCsv(view)}
+          disabled={view.rows.length === 0}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-40"
+        >
+          Download CSV
+        </button>
+      </div>
 
-              {isOpen && (
-                <div className="border-t border-slate-200 bg-white/80 px-5 py-4">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <BreakdownCell label="Civil Servant — Employee" value={nu(t.csEmployeeAmount)} />
-                    <BreakdownCell
-                      label="Civil Servant — Employer"
-                      value={t.csEmployerAmount > 0 ? nu(t.csEmployerAmount) : "—"}
-                    />
-                    <BreakdownCell label="OPS Contribution" value={nu(t.opsAmount)} />
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
-                      Heads: {activeCs + activeOps}
-                    </span>
-                    <span>
-                      Remit to <strong>{st.regulator}</strong> by the {st.dueDay}
-                      <sup>th</sup> of the following month.
-                    </span>
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        alert(`Remittance schedule for ${st.label} exported (stub).`);
-                      }}
-                      className="ml-auto rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+      {/* Header pills + remit instruction */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[11px]">
+        <HeaderPill label="Agency Code" value={view.header.agencyCode} />
+        <HeaderPill label="Payroll Dept" value={view.header.payrollDept} />
+        <HeaderPill label="Financial Year" value={view.header.financialYear} />
+        <HeaderPill label="Month ID" value={view.header.monthId} />
+        <HeaderPill label="Remit To" value={view.body} />
+        <HeaderPill label="Account" value={view.account} />
+        <HeaderPill label="Contra" value={view.contra} />
+      </div>
+
+      {/* Totals strip */}
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <SummaryTile label="Heads" value={String(view.rows.length)} />
+        <SummaryTile label="Total Amount" value={nu(view.totalAmount)} />
+        <SummaryTile
+          label="Dispatch"
+          value={
+            disp && disp.total > 0
+              ? `${disp.dispatched}/${disp.total} dispatched${disp.pending ? ` · ${disp.pending} pending` : ""}`
+              : streamKey === "cmReport" || streamKey === "paybillRecoveries"
+                ? "Internal report"
+                : "Queue empty"
+          }
+        />
+      </div>
+
+      {/* Full schedule table (no collapse) */}
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-[12px]">
+          <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <tr>
+              {view.columns.map((c) => (
+                <th
+                  key={c.id}
+                  className={`whitespace-nowrap px-3 py-2.5 ${c.align === "right" ? "text-right" : ""}`}
+                >
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {view.rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={view.columns.length}
+                  className="px-3 py-8 text-center text-sm text-slate-500"
+                >
+                  No eligible employees for this stream / agency / period.
+                </td>
+              </tr>
+            ) : (
+              view.rows.map((row, idx) => (
+                <tr key={idx} className="hover:bg-slate-50">
+                  {view.columns.map((c) => (
+                    <td
+                      key={c.id}
+                      className={`whitespace-nowrap px-3 py-1.5 ${c.align === "right" ? "text-right tabular-nums" : ""}`}
                     >
-                      Download schedule
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                      {typeof row[c.id] === "number"
+                        ? Number(row[c.id]).toLocaleString("en-IN")
+                        : String(row[c.id] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+          {view.rows.length > 0 && (
+            <tfoot className="bg-slate-50 text-xs font-bold text-slate-700">
+              <tr>
+                <td colSpan={view.columns.length - 1} className="px-3 py-2.5 text-right">
+                  Total for this Payroll Department
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">
+                  {nu(view.totalAmount)}
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
 
-      <p className="mt-4 text-[11px] text-slate-500">
-        Amounts recompute automatically as the employee master changes. Paybill Standard formulae: PF = 11 % of Basic
-        (employee) + 15 % (employer), GIS per slab, TDS per slab, HC = 1 % of Gross, CSWS = Nu. 150/head.
-      </p>
+      {/* SRS footer note */}
+      {isRemittanceStream(streamKey) && (
+        <p className="mt-4 text-[11px] text-slate-500">
+          <strong>SRS:</strong> this remittance is auto-posted to {view.body} by IFMIS once MCP releases the
+          salary payment — a TSA {view.contra.includes("Contra") ? "contra entry" : "debit"} is generated against{" "}
+          {view.account}. Column schema sourced from Paybill Formulae.xlsx
+          {streamKey === "rentNppf" && " (Rent NPPF follows the SRS Remittances POSTING note; no dedicated sheet)"}.
+        </p>
+      )}
     </div>
   );
 }
 
-function BreakdownCell({ label, value }: { label: string; value: string }) {
+/* ─── helpers ───────────────────────────────────────────────────────────── */
+
+function isRemittanceStream(key: ScheduleViewKey): key is RemittanceStreamKey {
+  return key in REMITTANCE_DESTINATIONS;
+}
+
+function titleForStream(key: ScheduleViewKey): string {
+  switch (key) {
+    case "tds":               return "DRC — Tax on Salary (TDS) Schedule";
+    case "hc":                return "DRC — Health Contribution Schedule";
+    case "pf":                return "NPPF — Provident Fund & Pension Schedule";
+    case "gis":               return "RICBL — Group Insurance Scheme Schedule";
+    case "rentDrc":           return "DRC — House Rent Schedule";
+    case "rentNhdcl":         return "NHDCL — House Rent Schedule";
+    case "rentNppf":          return "NPPF — House Rent Schedule";
+    case "csws":              return "RCSC — CSWS Schedule";
+    case "audit":             return "RAA — Audit Recoveries Schedule";
+    case "afws":              return "RBP — AFWS Recoveries Schedule";
+    case "drcCombined":       return "DRC — TDS + Health Contribution Schedule";
+    case "paybillRecoveries": return "Paybill Recoveries Report";
+    case "cmReport":          return "Paybill Report to Cash Management";
+  }
+}
+
+function subtitleForStream(key: ScheduleViewKey): string {
+  switch (key) {
+    case "paybillRecoveries":
+      return "All statutory + floating deductions per employee (columns E–K). Total O = E+F+G+H+I+J+K.";
+    case "cmReport":
+      return "Payment file sent to Cash Management after bank validations complete.";
+    case "afws":
+      return "Armed Forces Welfare Scheme recoveries for Royal Bhutan Police (OPS).";
+    default:
+      return "Auto-posted by IFMIS to the destination system once MCP releases the salary payment.";
+  }
+}
+
+/* ─── small presentational components ───────────────────────────────────── */
+
+function DispatchBadge({ disp }: { disp: Record<string, number> }) {
+  const tone =
+    disp.failed > 0
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : disp.pending > 0
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-emerald-200 bg-emerald-50 text-emerald-800";
+  const label =
+    disp.failed > 0
+      ? `${disp.failed} failed`
+      : disp.pending > 0
+        ? `${disp.pending} pending`
+        : `${disp.dispatched}/${disp.total} dispatched`;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</div>
-      <div className="mt-0.5 text-base font-semibold tabular-nums text-slate-900">{value}</div>
+    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>
+      <span className="text-[9px] font-bold uppercase tracking-widest opacity-70">Auto-post</span>
+      {label}
+    </span>
+  );
+}
+
+function HeaderPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
+      <span className="font-mono text-slate-700">{value}</span>
+    </span>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</div>
+      <div className="mt-0.5 text-lg font-bold text-slate-900">{value}</div>
     </div>
   );
 }

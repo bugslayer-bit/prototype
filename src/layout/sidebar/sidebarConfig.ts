@@ -12,7 +12,7 @@
    under "Role-gate shortcuts" below.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { CS_SUBNAV } from "../../modules/payroll/shared/navigation/PayrollSubNav";
+import { CS_SUBNAV, OPS_SUBNAV } from "../../modules/payroll/shared/navigation/PayrollSubNav";
 
 export interface SidebarLink {
   label: string;
@@ -130,19 +130,49 @@ const CLOSURE_AUTHORISERS = [ROLE_ADMIN, ROLE_HEAD_OF_AGENCY, ROLE_FINANCE];
 
 /* ─── Configuration ─────────────────────────────────────────────────────── */
 
-/* Civil Service workflow children are built from the same source of truth as
-   the on-page PayrollSubNav tiles, so the sidebar always mirrors them. */
-const CS_WORKFLOW_CHILDREN: SidebarLink[] = CS_SUBNAV.map((g) => ({
-  label: `${g.icon}  ${g.label}`,
-  to: g.links[0]?.to ?? "/payroll/management?stream=civil-servant",
-  roleIds: [ROLE_ADMIN, ROLE_HR, ROLE_FINANCE, ROLE_HEAD_OF_AGENCY, ROLE_AUDITOR],
-  children: g.links.map((l) => ({
-    label: l.label,
-    to: l.to,
-    badge: l.badge,
-    roleIds: [ROLE_ADMIN, ROLE_HR, ROLE_FINANCE, ROLE_HEAD_OF_AGENCY, ROLE_AUDITOR],
-  })),
-}));
+/* Civil Service / OPS workflow children are built from the same source of
+   truth as the on-page PayrollSubNav tiles, so the sidebar always mirrors
+   them. When a group has exactly one child, we flatten it to a leaf link
+   to avoid a "Payslip → Payslip" style duplicate submenu. */
+const PAYROLL_ROLES = [ROLE_ADMIN, ROLE_HR, ROLE_FINANCE, ROLE_HEAD_OF_AGENCY, ROLE_AUDITOR];
+
+function buildWorkflowChildren(groups: typeof CS_SUBNAV, fallbackTo: string): SidebarLink[] {
+  return groups.map((g) => {
+    const onlyOne = g.links.length === 1;
+    const first = g.links[0];
+    if (onlyOne && first) {
+      /* Flatten single-child groups so the group label becomes a leaf link
+         and no redundant submenu is rendered. */
+      return {
+        label: `${g.icon}  ${g.label}`,
+        to: first.to,
+        badge: first.badge,
+        roleIds: PAYROLL_ROLES,
+      };
+    }
+    return {
+      label: `${g.icon}  ${g.label}`,
+      to: first?.to ?? fallbackTo,
+      roleIds: PAYROLL_ROLES,
+      children: g.links.map((l) => ({
+        label: l.label,
+        to: l.to,
+        badge: l.badge,
+        roleIds: PAYROLL_ROLES,
+      })),
+    };
+  });
+}
+
+const CS_WORKFLOW_CHILDREN: SidebarLink[] = buildWorkflowChildren(
+  CS_SUBNAV,
+  "/payroll/management?stream=civil-servant",
+);
+
+const OPS_WORKFLOW_CHILDREN: SidebarLink[] = buildWorkflowChildren(
+  OPS_SUBNAV,
+  "/payroll/management?stream=ops",
+);
 
 export const sidebarSections: SidebarSection[] = [
   /* ─────────────────────────────────────────────────────────────────────
@@ -196,7 +226,12 @@ export const sidebarSections: SidebarSection[] = [
             roleIds: PAYROLL_ACTORS,
             children: CS_WORKFLOW_CHILDREN,
           },
-          { label: "Other Public Service", to: "/payroll/management?stream=ops", roleIds: PAYROLL_ACTORS },
+          {
+            label: "Other Public Service",
+            to: "/payroll/management?stream=ops",
+            roleIds: PAYROLL_ACTORS,
+            children: OPS_WORKFLOW_CHILDREN,
+          },
           { label: "Allowance Configuration", to: "/payroll/allowance-config", badge: "PRN 1.2", roleIds: PAYROLL_ACTORS },
           { label: "Pay Scale Master", to: "/payroll/pay-scale", badge: "DDi 3.x", roleIds: PAYROLL_ACTORS },
           { label: "Payslip Generation", to: "/payroll/payslip", badge: "PRN 8.x", roleIds: PAYROLL_ACTORS },
@@ -204,6 +239,13 @@ export const sidebarSections: SidebarSection[] = [
           { label: "Payroll Calendar Configuration", to: "/payroll/schedule", badge: "PRN 2.0", roleIds: PAYROLL_ACTORS, agencyCodes: ["16"] },
           { label: "Paybill Standard", to: "/payroll/paybill", badge: "Formulae", roleIds: PAYROLL_ACTORS, agencyCodes: ["16"] },
         ],
+      },
+      /* Muster Roll — separate top-level Payroll feature. Routes to the
+         unified wages module inside Recurring Vendor Payments. */
+      {
+        label: "Muster Roll",
+        to: "/modules/recurring-vendor-payments/muster-roll-wages",
+        roleIds: PAYROLL_ACTORS,
       },
     ],
   },

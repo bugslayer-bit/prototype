@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Muster Roll & Wages — Unified Page (PRN 6.1 / 7.1 / 8.1)
+   Muster Roll & Wages — Unified Page (PRN 6.1 / 7.1)
    Bhutan Integrated Financial Management Information System (IFMIS)
 
-   Consolidates three payroll sub-modules into a single dynamic page
+   Consolidates the muster roll sub-modules into a single dynamic page
    under IFMIS Recurring Vendor Payment Management:
      1. Muster Roll Creation  (PRN 6.1)
      2. Muster Roll Payment   (PRN 7.1)
-     3. Sitting Fee & Honorarium (PRN 8.1)
 
    Each section is rendered as a dynamic tab with its own content.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -20,7 +19,6 @@ import { resolveAgencyContext } from '../../../shared/data/agencyPersonas';
 /* ── Lazy-load the existing page components ─────────────────────────────── */
 import { MusterRollCreationPage } from '../../payroll/pages/MusterRollCreationPage';
 import { MusterRollPaymentPage } from '../../payroll/pages/MusterRollPaymentPage';
-import { SittingFeePage } from '../../payroll/pages/SittingFeePage';
 
 /* ───────────────────────────────────────────────────────────────────────────
    Section Configuration
@@ -60,18 +58,6 @@ const SECTIONS: SectionConfig[] = [
       </svg>
     ),
   },
-  {
-    id: 'sitting-fee',
-    label: 'Sitting Fee & Honorarium',
-    shortLabel: 'Sitting Fee',
-    badge: 'PRN 8.1',
-    description: 'Manage sitting fees and honorarium payments with TDS deduction and UCoA posting.',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-      </svg>
-    ),
-  },
 ];
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -108,6 +94,14 @@ export function MusterRollWagesPage() {
   const context = resolveAgencyContext(auth.activeRoleId);
   const [activeSection, setActiveSection] = useState<string>('creation');
   const [showOverview, setShowOverview] = useState(true);
+  /* Shared hand-off: when the Creation tab's "Proceed to Payment" button
+     fires, we store the project id and switch to the Payment tab. */
+  const [paymentProjectId, setPaymentProjectId] = useState<string | undefined>();
+
+  const handleProceedToPayment = (projectId: string) => {
+    setPaymentProjectId(projectId);
+    setActiveSection('payment');
+  };
 
   /* Resolve which section component to render */
   const activeSectionConfig = useMemo(
@@ -118,11 +112,9 @@ export function MusterRollWagesPage() {
   const renderSectionContent = () => {
     switch (activeSection) {
       case 'creation':
-        return <MusterRollCreationPage />;
+        return <MusterRollCreationPage onProceedToPayment={handleProceedToPayment} />;
       case 'payment':
-        return <MusterRollPaymentPage />;
-      case 'sitting-fee':
-        return <SittingFeePage />;
+        return <MusterRollPaymentPage initialProjectId={paymentProjectId} />;
       default:
         return null;
     }

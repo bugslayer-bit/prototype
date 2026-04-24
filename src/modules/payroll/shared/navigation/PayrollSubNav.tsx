@@ -62,11 +62,13 @@ export const CS_SUBNAV: SubNavGroup[] = [
     label: "Travel Claims",
     icon: "✈️",
     links: [
-      { label: "Travel Claims Desk", to: "/payroll/travel-claims", badge: "DDi 28-30.x" },
+      { label: "Claim List", to: "/payroll/travel-claims", badge: "§1-2" },
+      { label: "Payment Order", to: "/payroll/travel-claims/payment-order", badge: "§3" },
+      { label: "POST Payment", to: "/payroll/travel-claims/post-payment", badge: "§4" },
     ],
   },
   {
-    label: "Remittances & Payslip",
+    label: "Remittances",
     icon: "🏦",
     links: [
       { label: "Paybill Recoveries", to: "/payroll/recoveries" },
@@ -74,9 +76,17 @@ export const CS_SUBNAV: SubNavGroup[] = [
       { label: "PF (NPPF)", to: "/payroll/remittance/pf" },
       { label: "GIS (RICBL)", to: "/payroll/remittance/gis" },
       { label: "TDS & HC (DRC)", to: "/payroll/remittance/drc" },
-      { label: "House Rent (DRC / NHDCL)", to: "/payroll/remittance/rent" },
+      { label: "House Rent (DRC)", to: "/payroll/remittance/rent/drc" },
+      { label: "House Rent (NHDCL)", to: "/payroll/remittance/rent/nhdcl" },
+      { label: "House Rent (NPPF)", to: "/payroll/remittance/rent/nppf" },
       { label: "CSWS (RCSC)", to: "/payroll/remittance/csws" },
       { label: "Audit Recoveries (RAA)", to: "/payroll/remittance/audit" },
+    ],
+  },
+  {
+    label: "Payslip",
+    icon: "📄",
+    links: [
       { label: "Payslip", to: "/payroll/payslip" },
     ],
   },
@@ -137,18 +147,15 @@ export const OPS_SUBNAV: SubNavGroup[] = [
     label: "Travel Claims",
     icon: "✈️",
     links: [
-      { label: "Travel Claims", to: "/payroll/ops/travel-claims", badge: "PRN 4.1" },
+      { label: "Claim List", to: "/payroll/ops/travel-claims", badge: "§1-2" },
+      { label: "Payment Order", to: "/payroll/ops/travel-claims/payment-order", badge: "§3" },
+      { label: "POST Payment", to: "/payroll/ops/travel-claims/post-payment", badge: "§4" },
     ],
   },
-  {
-    label: "Muster Roll & Sitting Fee",
-    icon: "🧾",
-    links: [
-      { label: "Muster Roll Creation", to: "/payroll/ops/muster-creation", badge: "DDi 31.x" },
-      { label: "Muster Roll Payment", to: "/payroll/ops/muster-payment", badge: "DDi 32.x" },
-      { label: "Sitting Fee & Honorarium", to: "/payroll/ops/sitting-fee", badge: "DDi 33-34.x" },
-    ],
-  },
+  /* "Muster Roll & Sitting Fee" intentionally NOT listed here — it is a
+     separate top-level feature that lives under
+     Expenditure → Recurring Vendor Payments → Muster Roll Wages
+     (/modules/recurring-vendor-payments/muster-roll-wages). */
   {
     label: "Benefits & Separation",
     icon: "🎓",
@@ -157,7 +164,7 @@ export const OPS_SUBNAV: SubNavGroup[] = [
     ],
   },
   {
-    label: "Remittances & Payslip",
+    label: "Remittances",
     icon: "🏦",
     links: [
       { label: "Paybill Recoveries", to: "/payroll/ops/recoveries" },
@@ -165,8 +172,17 @@ export const OPS_SUBNAV: SubNavGroup[] = [
       { label: "PF (NPPF)", to: "/payroll/ops/remittance/pf" },
       { label: "GIS (RICBL)", to: "/payroll/ops/remittance/gis" },
       { label: "TDS & HC (DRC)", to: "/payroll/ops/remittance/drc" },
-      { label: "House Rent (DRC / NHDCL)", to: "/payroll/ops/remittance/rent" },
+      { label: "House Rent (DRC)", to: "/payroll/ops/remittance/rent/drc" },
+      { label: "House Rent (NHDCL)", to: "/payroll/ops/remittance/rent/nhdcl" },
+      { label: "House Rent (NPPF)", to: "/payroll/ops/remittance/rent/nppf" },
       { label: "Audit Recoveries (RAA)", to: "/payroll/ops/remittance/audit" },
+      { label: "AFWS (RBP)", to: "/payroll/ops/remittance/afws" },
+    ],
+  },
+  {
+    label: "Payslip",
+    icon: "📄",
+    links: [
       { label: "Payslip", to: "/payroll/ops/payslip" },
     ],
   },

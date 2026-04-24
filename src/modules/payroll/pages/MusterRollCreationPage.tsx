@@ -61,7 +61,15 @@ const EMPTY_BENEFICIARY_FORM: AddBeneficiaryForm = {
   bankBranch: "",
 };
 
-export function MusterRollCreationPage() {
+export interface MusterRollCreationPageProps {
+  /** Optional callback fired when the user clicks "Proceed to Payment" on
+   *  the Data Update / Review step. Receives the selected project id so
+   *  the parent can switch to the Payment tab with it pre-selected. */
+  onProceedToPayment?: (projectId: string) => void;
+}
+
+export function MusterRollCreationPage(props: MusterRollCreationPageProps = {}) {
+  const { onProceedToPayment } = props;
   const { activeAgencyCode } = useAuth();
   const context = resolveAgencyContext(useAuth().activeRoleId);
   const caps = usePayrollRoleCapabilities();
@@ -1124,17 +1132,32 @@ export function MusterRollCreationPage() {
         )}
 
         {currentStep === "review-finalize" && (
-          <button
-            onClick={handleSaveAndClose}
-            disabled={!caps.canProcessMuster}
-            className={`px-5 py-2.5 rounded-lg font-semibold transition text-sm ${
-              caps.canProcessMuster
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            Save & Close
-          </button>
+          <>
+            <button
+              onClick={handleSaveAndClose}
+              disabled={!caps.canProcessMuster}
+              className={`px-5 py-2.5 rounded-lg font-semibold transition text-sm ${
+                caps.canProcessMuster
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              Save & Close
+            </button>
+            {onProceedToPayment && selectedProject && (
+              <button
+                onClick={() => onProceedToPayment(selectedProject.id)}
+                disabled={!caps.canProcessMuster}
+                className={`px-5 py-2.5 rounded-lg font-semibold transition text-sm ${
+                  caps.canProcessMuster
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                Proceed to Payment →
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

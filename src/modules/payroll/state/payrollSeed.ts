@@ -606,31 +606,54 @@ function generateMusterRollProjects(): MusterRollProject[] {
 
 export const MUSTERROLL_PROJECTS: MusterRollProject[] = generateMusterRollProjects();
 
+/* Dummy Bhutanese names for a richer muster-roll beneficiary demo.
+   Every project gets ~10 workers with realistic name + gender variety so
+   the validation and paybill screens aren't empty. */
+const MR_FIRST_NAMES = [
+  "Tenzin", "Sonam", "Karma", "Pema", "Dechen", "Ugyen", "Jigme", "Kinley",
+  "Choki", "Yangchen", "Namgay", "Tashi", "Dorji", "Rinzin", "Sangay",
+  "Tshering", "Phuntsho", "Lhaden", "Lobzang", "Deki",
+];
+const MR_LAST_NAMES = [
+  "Wangchuk", "Dorji", "Zangmo", "Lhamo", "Penjor", "Tshering", "Wangmo",
+  "Choden", "Dukpa", "Norbu", "Gyeltshen", "Nidup", "Tobgyel", "Yangden",
+];
+
 function generateMusterRollBeneficiaries(): MusterRollBeneficiary[] {
   const beneficiaries: MusterRollBeneficiary[] = [];
   const types: Array<MusterRollBeneficiary["beneficiaryType"]> = ["skilled", "semi-skilled"];
   const wages: Record<MusterRollBeneficiary["beneficiaryType"], number> = { skilled: 700, "semi-skilled": 450 };
   let globalIdx = 0;
 
-  MUSTERROLL_PROJECTS.forEach((proj) => {
-    /* 2 beneficiaries per project for demo */
-    for (let i = 0; i < 2; i++) {
+  MUSTERROLL_PROJECTS.forEach((proj, projIdx) => {
+    /* 10 beneficiaries per project for a healthy demo. */
+    for (let i = 0; i < 10; i++) {
       const bType = types[i % 2];
       const bank = pickBank(globalIdx + 100);
       const gender = GENDERS[globalIdx % GENDERS.length];
       const seqStr = String(globalIdx + 1).padStart(3, "0");
+
+      const firstName = MR_FIRST_NAMES[(projIdx * 3 + i) % MR_FIRST_NAMES.length];
+      const lastName = MR_LAST_NAMES[(projIdx + i * 2) % MR_LAST_NAMES.length];
+
+      /* Make ~15 % of beneficiaries have missing bank info so the "Bank
+         Details Verified" failure path and "Proceed with verified only"
+         flow are demonstrable without extra setup. */
+      const hasBankGap = i === 3 || i === 8; // 2 of every 10
+      const gapType = i === 3 ? "missing-account" : "missing-bank";
+
       beneficiaries.push({
         id: `MRB-${seqStr}`,
         projectId: proj.id,
-        name: `MR Worker ${seqStr}`,
-        cid: `MR${proj.agencyCode}${String(5000 + globalIdx).padStart(8, "0")}`,
+        name: `${firstName} ${lastName}`,
+        cid: `${String(10000000000 + globalIdx * 13).slice(0, 11)}`,
         gender,
         dateOfBirth: seedDate(globalIdx * 11, 1985, 1999),
         contactNo: `17${String(100000 + globalIdx).slice(0, 6)}`,
         beneficiaryType: bType,
         dailyWage: wages[bType],
-        bankName: bank.bankName,
-        bankAccountNo: bank.bankAccountNo,
+        bankName: hasBankGap && gapType === "missing-bank" ? "" : bank.bankName,
+        bankAccountNo: hasBankGap && gapType === "missing-account" ? "" : bank.bankAccountNo,
         bankBranch: bank.bankBranch,
         status: "active",
       });

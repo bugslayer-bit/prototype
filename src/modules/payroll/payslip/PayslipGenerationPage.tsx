@@ -12,7 +12,7 @@
    function single-purpose, matching the project's refactor goals.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { EMPLOYEES } from "../state/payrollSeed";
 import {
@@ -29,7 +29,8 @@ import { PayslipPostingSelector } from "./components/PayslipPostingSelector";
 import { PayslipFiltersBar } from "./components/PayslipFiltersBar";
 import { PayslipEmployeeTable } from "./components/PayslipEmployeeTable";
 import { PayslipCard } from "./components/PayslipCard";
-import { PayslipActions } from "./components/PayslipActions";
+import { PayslipActions, type VariantMode } from "./components/PayslipActions";
+import type { PayslipVariant } from "./helpers/buildPayslip";
 
 export interface PayslipGenerationPageProps {
   /** Which payroll stream this instance of the page is scoped to. */
@@ -57,6 +58,8 @@ export function PayslipGenerationPage(props: PayslipGenerationPageProps) {
   /* ── State ───────────────────────────────────────────────────────────── */
   const filters = usePayslipFilters();
   const postings = usePayrollPostings();
+  const [variant, setVariant] = useState<VariantMode>("auto");
+  const [separationType, setSeparationType] = useState<string>("Superannuation");
 
   /* ── Derived data ────────────────────────────────────────────────────── */
   const selectedPosting = useMemo(
@@ -78,7 +81,20 @@ export function PayslipGenerationPage(props: PayslipGenerationPageProps) {
     employees,
     selectedEmployeeId: filters.selectedEmployeeId,
     period: filters.period,
+    variant,
+    separationType,
   });
+
+  /* Auto-detected variant from the employee's separation date vs period.
+     We detect it by running an "auto" build alongside (cheap — same hook). */
+  const autoDoc = usePayslipPreview({
+    employees,
+    selectedEmployeeId: filters.selectedEmployeeId,
+    period: filters.period,
+    variant: "auto",
+    separationType,
+  });
+  const autoDetected: PayslipVariant | null = autoDoc?.variant ?? null;
 
   const { activeCount, totalCount } = useCategoryHeadcounts(category);
 
@@ -89,19 +105,21 @@ export function PayslipGenerationPage(props: PayslipGenerationPageProps) {
 
   const handleDownloadPdf = useCallback(() => {
     if (!previewDoc) return;
+    const kind = previewDoc.variant === "last" ? "Last Payslip" : "Regular Payslip";
     window.alert(
-      `PDF export for ${previewDoc.employee.name} — ${previewDoc.period.label} is queued. ` +
+      `${kind} PDF for ${previewDoc.employee.name} — ${previewDoc.period.label} is queued. ` +
         `(Real PDF generation will wire in once the document service endpoint is live.)`,
     );
   }, [previewDoc]);
 
   const handleBulkGenerate = useCallback(() => {
+    const kind = variant === "last" ? "Last Payslip" : variant === "regular" ? "Regular Payslip" : "auto-selected";
     window.alert(
-      `Bulk generation of ${employees.length} payslips for ` +
+      `Bulk generation of ${employees.length} ${kind} payslips for ` +
         `${filters.period.month}/${filters.period.year} queued. ` +
         `(Progress will appear in a download centre tray in a future iteration.)`,
     );
-  }, [employees.length, filters.period]);
+  }, [employees.length, filters.period, variant]);
 
   /* ── Render ──────────────────────────────────────────────────────────── */
   return (
@@ -147,6 +165,11 @@ export function PayslipGenerationPage(props: PayslipGenerationPageProps) {
           <PayslipActions
             disabled={!previewDoc}
             inScopeCount={employees.length}
+            variant={variant}
+            autoDetected={autoDetected}
+            separationType={separationType}
+            onVariantChange={setVariant}
+            onSeparationTypeChange={setSeparationType}
             onPrint={handlePrint}
             onDownloadPdf={handleDownloadPdf}
             onBulkGenerate={handleBulkGenerate}

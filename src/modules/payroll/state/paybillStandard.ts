@@ -212,9 +212,15 @@ export const REMITTANCE_DESTINATIONS = {
   hc:        { body: "DRC",   account: "DRC Revenue (HC)",       contra: "TSA Contra" },
   rentDrc:   { body: "DRC",   account: "DRC Rent Pool",          contra: "TSA Contra" },
   rentNhdcl: { body: "NHDCL", account: "NHDCL Rent Pool",        contra: "TSA Debit" },
+  /* Rent NPPF — per SRS Remittances spec (not a sheet in Paybill Formulae.xlsx). */
+  rentNppf:  { body: "NPPF",  account: "NPPF Rent Pool",         contra: "TSA Debit" },
   csws:      { body: "RCSC",  account: "CSWS via RICBL",         contra: "TSA Debit" },
   audit:     { body: "RAA",   account: "RAA Recoveries",         contra: "TSA Contra" },
+  /* AFWS — Armed Forces Welfare Scheme (RBP / OPS only). */
+  afws:      { body: "RBP",   account: "AFWS Account",           contra: "TSA Debit" },
 } as const;
+
+export type RemittanceStreamKey = keyof typeof REMITTANCE_DESTINATIONS;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    11. PAYBILL REPORT-TO-CM  (Paybill report to be sent to CM)

@@ -155,7 +155,7 @@ const FIELD_META: Record<HrFieldKey, FieldMeta> = {
   leaveTillDate:         { label: "Leave Until", type: "date", group: "Dates" },
   hrAuditType:           { label: "HR Audit Type", type: "select", options: ["Compliance","Performance","Pay Correction","Position Correction"], group: "Type" },
   legalActionType:       { label: "Legal Action Type", type: "select", options: ["Suspension","Censure","Warning","Reinstatement","Dismissal"], group: "Type" },
-  separationType:        { label: "Separation Type", type: "select", options: ["Voluntary Resignation","Superannuation","Compulsory Retirement","Termination","Dismissal","Deceased"], group: "Type" },
+  separationType:        { label: "Separation Type", type: "select", options: ["Superannuation","Voluntary Resignation","Early Retirement Scheme","Special Retirement Scheme","Compulsory Retirement","Termination","Agency Severance","Transfer","Dismissal","Deceased"], group: "Type" },
   separationDate:        { label: "Separation Date", type: "date", group: "Dates" },
   payArrears:            { label: "Pay Arrears (Nu)", type: "number", group: "Arrears" },
   allowanceArrears:      { label: "Allowance Arrears (Nu)", type: "number", group: "Arrears" },
